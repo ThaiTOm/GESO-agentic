@@ -1,0 +1,46 @@
+/* src/pages/ChatPage.module.css */
+
+.chatPage {
+    display: flex;
+    flex-direction: column;
+    height: 100%; /* Quan trọng: Đảm bảo component cha chiếm hết chiều cao */
+    background-color: #f9fafb; /* Màu nền nhẹ nhàng hơn */
+}
+
+.chatHeader {
+    padding: 1rem 1.5rem;
+    background-color: var(--card-background-light);
+    border-bottom: 1px solid var(--border-color);
+    flex-shrink: 0; /* Không cho header co lại */
+}
+
+.chatHeader h1 {
+    font-size: 1.25rem;
+    font-weight: 600;
+}
+
+.messageList {
+    flex-grow: 1; /* Quan trọng: Cho phép khu vực tin nhắn chiếm hết không gian còn lại */
+    overflow-y: auto; /* Thêm thanh cuộn khi tin nhắn đầy */
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem; /* Tăng khoảng cách giữa các tin nhắn */
+}
+
+.inputArea {
+    padding: 1rem 1.5rem;
+    background-color: var(--card-background-light);
+    border-top: 1px solid var(--border-color);
+    flex-shrink: 0; /* Không cho khu vực input co lại */
+}
+
+.typingIndicator {
+    font-style: italic;
+    color: #6b7280;
+    padding: 0.75rem 1rem;
+    background-color: #e5e7eb;
+    border-radius: 18px;
+    border-bottom-left-radius: 4px;
+    align-self: flex-start;
+}

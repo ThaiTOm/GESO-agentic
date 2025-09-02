@@ -1,0 +1,44 @@
+/* src/components/ui/StatCard.module.css */
+
+.statCard {
+    background-color: var(--card-background-light);
+    padding: 1.5rem;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.iconWrapper {
+    background-color: #e0e7ff; /* indigo-100 */
+    color: var(--primary-color);
+    padding: 0.75rem;
+    border-radius: 9999px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.info .title {
+    font-size: 0.9rem;
+    color: #6b7280;
+}
+
+.info .value {
+    font-size: 1.5rem;
+    font-weight: bold;
+}
+
+.info .change {
+    font-size: 0.8rem;
+    font-weight: 500;
+}
+
+.info .positive {
+    color: #16a34a; /* green-600 */
+}
+
+.info .negative {
+    color: #dc2626; /* red-600 */
+}

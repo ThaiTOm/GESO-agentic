@@ -1,0 +1,66 @@
+.homePage {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+}
+.homePage main {
+    flex-grow: 1;
+}
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 1rem;
+}
+.heroSection {
+    background: linear-gradient(90deg, #3b82f6, var(--primary-color));
+    color: white;
+    text-align: center;
+    padding: 6rem 1rem;
+}
+.heroSection h1 {
+    font-size: 3rem;
+    font-weight: 800;
+    margin-bottom: 1rem;
+}
+.heroSection p {
+    font-size: 1.25rem;
+    margin-bottom: 2rem;
+    max-width: 600px;
+    margin-left: auto;
+    margin-right: auto;
+}
+.ctaButton {
+    background-color: white;
+    color: var(--primary-color);
+    padding: 0.75rem 2rem;
+    border-radius: 9999px;
+    font-weight: bold;
+    transition: background-color 0.3s;
+}
+.ctaButton:hover {
+    background-color: #e5e7eb;
+}
+.featuresSection {
+    padding: 5rem 1rem;
+    background-color: var(--background-light);
+    text-align: center;
+}
+.featuresSection h2 {
+    font-size: 2.25rem;
+    margin-bottom: 3rem;
+}
+.featuresGrid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 2rem;
+}
+.featureCard {
+    background-color: var(--card-background-light);
+    padding: 2rem;
+    border-radius: 8px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+.featureCard h3 {
+    font-size: 1.25rem;
+    margin-bottom: 0.5rem;
+}

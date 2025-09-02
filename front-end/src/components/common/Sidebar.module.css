@@ -1,0 +1,41 @@
+.sidebar {
+    width: 256px;
+    background-color: var(--card-background-light);
+    box-shadow: 2px 0 5px rgba(0,0,0,0.05);
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+}
+.logo {
+    font-size: 1.75rem;
+    font-weight: bold;
+    color: var(--primary-color);
+    padding: 1.5rem 1rem;
+    border-bottom: 1px solid var(--border-color);
+    text-align: center;
+}
+.nav {
+    flex-grow: 1;
+    padding: 1rem;
+}
+.navLink {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    border-radius: 6px;
+    margin-bottom: 0.5rem;
+    color: var(--text-light);
+    transition: background-color 0.2s, color 0.2s;
+}
+.navLink:hover {
+    background-color: #f3f4f6;
+}
+.navLink.active {
+    background-color: var(--primary-color);
+    color: white;
+}
+.footer {
+    padding: 1rem;
+    border-top: 1px solid var(--border-color);
+}
