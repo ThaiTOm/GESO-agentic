@@ -1,5 +1,15 @@
 import fitz
 import logging
+import os
+import json
+import re
+import logging
+from typing import Tuple, Optional
+import pandas as pd
+
+from config import settings
+from llm.llm_call import get_raw_llm_output
+from context_engine.rag_prompt import SELECT_EXCEL_FILE_PROMPT_TEMPLATE
 
 logger = logging.getLogger(__name__)
 
@@ -59,21 +69,6 @@ def chunk_text(text: str, max_chars: int = 1000, overlap: int = 200) -> tuple[li
             start = chunk_indices[-1][0] + 1
 
     return chunks, chunk_indices
-
-
-import os
-import json
-import re
-import logging
-from typing import Tuple, Optional
-import pandas as pd
-
-from config import settings
-from llm.llm_call import call_llm
-from context_engine.rag_prompt import SELECT_EXCEL_FILE_PROMPT_TEMPLATE
-
-logger = logging.getLogger(__name__)
-
 
 
 def _read_excel_file_data(file_path: str) -> Tuple[Optional[pd.DataFrame], Optional[pd.DataFrame], str, Optional[str]]:
@@ -251,7 +246,7 @@ async def select_excel_database(query: str, found_collection: str, cloud: bool =
 
     # Call LLM API to select the database
     try:
-        result = await call_llm(prompt, max_tokens=32, temperature=0.0, cloud=cloud)
+        result = await get_raw_llm_output(prompt, max_tokens=32, cloud=cloud)
 
         raw_text = result.strip()
 

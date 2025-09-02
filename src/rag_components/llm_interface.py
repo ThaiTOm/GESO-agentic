@@ -1,6 +1,6 @@
 from typing import List, Dict
 
-from llm.llm_call import call_llm
+from llm.llm_call import get_structured_llm_output, get_raw_llm_output
 from config import settings
 from context_engine.rag_prompt import (
     CLASSIFICATION_SELECT_FILE_PROMPT,
@@ -14,7 +14,7 @@ def generate_classification_prompt(query: str) -> str:
 
 async def generate_pandas_code(prompt: str) -> str:
     full_prompt = f"{PANDAS_CODE_GENERATION_PROMPT}\n\nUser query: {prompt}"
-    result = await call_llm(full_prompt, max_tokens=1024, temperature=0)
+    result = await get_raw_llm_output(full_prompt, max_tokens=1024, cloud=not settings.SELF_HOST)
     # Extract the generated text
     content = result["choices"][0]["text"].strip()
 
@@ -35,7 +35,7 @@ async def generate_final_answer(user_query: str, result_chunk: str, cloud=False)
                       """
     print("*" * 100)
     print("==> full_prompt: ", full_prompt)
-    result = await call_llm(full_prompt, max_tokens=1024, temperature=0, cloud=cloud)
+    result = await get_raw_llm_output(prompt=full_prompt, max_tokens=1024, cloud=cloud)
 
     # Extract the generated text
     content = result.strip()
@@ -57,5 +57,5 @@ async def reformulate_query(query: str, chat_history: List[Dict]) -> str:
     context_str = "\n".join([f"Q: {item['question']}\nA: {item['answer']}" for item in recent_history])
     prompt = REFORMULATION_PROMPT.format(chat_history=context_str, query=query)
 
-    result = await call_llm(prompt, max_tokens=256, temperature=0.1, cloud=not settings.SELF_HOST)
+    result = await get_raw_llm_output(prompt, max_tokens=256, cloud=not settings.SELF_HOST)
     return result.strip()

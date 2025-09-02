@@ -2,7 +2,7 @@ from rag_components.chatbot_manager import get_chatbot_name_by_api_key
 from rag_components.llm_interface import reformulate_query, generate_final_answer
 from database.typesense_search import get_all_chunks_of_page, perform_vector_search
 from typing_class.rag_type import *
-from llm.llm_call import call_llm, cloud_call
+from llm.llm_call import get_raw_llm_output
 from processing.document_processor import *
 from llm.ModelEmbedding import get_embedding_model_service
 embeddings_service = get_embedding_model_service()
@@ -225,7 +225,7 @@ def search_documents(query_text, top_k=10):
 
 def call_llm_api(prompt, max_tokens=256, temperature=0.0):
     try:
-        result = call_llm(prompt, max_tokens=max_tokens, temperature=temperature)
+        result = get_raw_llm_output(prompt, max_tokens=max_tokens)
 
         # Extract and return just the generated text
         if "choices" in result and len(result["choices"]) > 0:

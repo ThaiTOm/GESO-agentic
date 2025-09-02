@@ -1,16 +1,16 @@
-import os
-from fastapi import FastAPI, HTTPException, UploadFile, File, Form
+# orchestrator_main.py
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
-from config import settings
+from fastapi import FastAPI, HTTPException
 from utils.logging_config import *
-from routes import rag_routes
-from database.typesense_declare import get_typesense_instance_service
-get_typesense_instance_service()
+from typing_class.graph_type import OrchestratorRequest, OrchestratorResponse
+from graph.main_graph import build_graph
+from config import settings
+# --- FastAPI Application Setup ---
+
 app = FastAPI(
-    title="RAG PDF/Excel System API",
-    description="API for the RAG system that processes PDFs and Excel files",
-    version="1.0.0"
+    title="Policy-Aware Orchestrator Agent",
+    description="Orchestrates calls to backend RAG and Data Analysis services after enforcing access policies.",
+    version="1.0.0",
 )
 
 # Add CORS middleware
@@ -22,17 +22,40 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Add logging middleware
+# Add logging middleware (assuming you have this file)
 app.add_middleware(LoggingMiddleware)
 
-# Mount static files for uploads
-os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
-app.mount("/uploads", StaticFiles(directory=settings.UPLOAD_DIR), name="uploads")
+# Compile the LangGraph application once at startup.
+# This is efficient as the graph structure doesn't change.
+langgraph_app = build_graph()
 
+# --- API Endpoint Definition ---
 
-app.include_router(rag_routes.router, prefix="/api/v1", tags=["RAG System"])
+@app.post("/orchestrate", response_model=OrchestratorResponse)
+async def orchestrate_query(request: OrchestratorRequest):
+    """
+    Receives a natural language query and user info, uses LangGraph to enforce security policy,
+    routes to the correct backend service, and returns the result.
+    """
+    # Invoke the graph asynchronously and wait for the final state
 
-# You can add a root endpoint for health checks
-@app.get("/", tags=["Health Check"])
-def read_root():
-    return {"status": "ok", "message": "Welcome to the RAG API"}
+    final_state = await langgraph_app.ainvoke(request)
+
+    # --- Handle the Final State ---
+
+    # IMPORTANT: Check the result of the authorization step.
+    # If the user was not authorized, the graph will have ended early.
+    if not final_state.get("is_authorized"):
+        # Return an HTTP 403 Forbidden error to the client.
+        # This is the correct and secure way to handle unauthorized access.
+        raise HTTPException(
+            status_code=403,
+            detail=f"Access Denied: {final_state.get('authorization_reason', 'You do not have permission for this request.')}"
+        )
+
+    # If the user was authorized, the graph ran to completion.
+    # Return the final response from the tool.
+    return OrchestratorResponse(response=final_state.get("final_response"))
+
+# To run this server from your terminal:
+# uvicorn main:app --host 0.0.0.0 --port 8001 --reload

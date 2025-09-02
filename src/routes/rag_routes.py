@@ -1,5 +1,5 @@
 from datetime import timezone
-from fastapi import Depends, Query
+from fastapi import Depends, Query, APIRouter, HTTPException, UploadFile, File, Header
 from utils import helper_rag
 from typing_class.rag_type import *
 from database.typesense_declare import get_typesense_instance_service
@@ -114,7 +114,6 @@ async def process_pdf_endpoint(chatbot_name: str, file: UploadFile = File(...), 
 async def query_documents_endpoint(request: QueryRequest, api_key: str = Header(...), typesense_client: Any = Depends(get_typesense_client)):
     """Endpoint thực hiện RAG query, trả về câu trả lời từ LLM."""
     response_data = await helper_rag.process_rag_query(request, api_key, typesense_client)
-    print(response_data)
     return response_data
 
 

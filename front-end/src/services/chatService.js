@@ -1,34 +1,81 @@
 import axios from 'axios';
 
-// Khi có server thật, hãy thay thế URL này
-const API_URL = 'http://your-real-api.com/chat';
+// The endpoint for the orchestrator
+const ORCHESTRATE_API_URL = 'http://localhost:8001/orchestrate';
 
-const mockSendMessage = (message) => {
-  console.log(`Sending to MOCK server: "${message}"`);
-  return new Promise(resolve => {
-    setTimeout(() => {
-      const replies = [
-        `Tôi đã nhận được tin nhắn: "${message}".`,
-        "Cảm ơn bạn. Tôi đang xử lý yêu cầu của bạn...",
-        "Đây là một câu trả lời tự động. Tôi sẽ liên hệ lại sau.",
-      ];
-      const reply = replies[Math.floor(Math.random() * replies.length)];
-      resolve({ data: { reply } });
-    }, 1500);
-  });
+// --- Configuration ---
+const API_KEY = "KlUHJW7mzjJ6kLXxxraIWqNANH5xO6cH";
+const USER_ID = "duythai";
+const USER_ROLE = "duythai";
+
+/**
+ * Formats the message history for the API.
+ * The API expects a simple { role, content } format with text only.
+ * @param {Array<Object>} messages - The message array from the useChat hook.
+ * @returns {Array<{role: string, content: string}>}
+ */
+const formatChatHistory = (messages) => {
+    // We filter out the very first "Hello!" message from the bot,
+    // as it's not part of the actual conversation history.
+    // You might adjust this logic based on your needs.
+    const actualConversation = messages.slice(1);
+
+    return actualConversation.map(msg => {
+        const role = msg.sender === 'user' ? 'user' : 'assistant';
+
+        let content = '';
+        if (typeof msg.content === 'string') {
+            content = msg.content;
+        } else if (typeof msg.content === 'object' && msg.content !== null) {
+            content = msg.content.answer || msg.content.text_summary_for_llm || '[Data was displayed]';
+        }
+
+        return { role, content };
+    });
 };
 
-export const sendMessageToServer = async (message) => {
-  try {
-    // Tạm thời dùng mock server để test
-    const response = await mockSendMessage(message);
-    return response.data.reply;
-    
-    // Khi có server thật, bỏ comment dòng dưới và xóa dòng trên
-    // const response = await axios.post(API_URL, { message });
-    // return response.data.reply;
-  } catch (error) {
-    console.error("Error sending message to server:", error);
-    return "Rất tiếc, đã có lỗi kết nối. Vui lòng thử lại sau.";
-  }
+/**
+ * Sends a query and the chat context to the main orchestrator endpoint.
+ * @param {string} message - The current user input.
+ * @param {Array<Object>} chatHistory - The entire history of messages from the chat state.
+ * @returns {Promise<any>} A promise that resolves to the server's response object or an error string.
+ */
+export const sendMessageToServer = async (message, chatHistory) => {
+    const formattedHistory = formatChatHistory(chatHistory);
+
+    // *** THIS IS THE KEY CHANGE ***
+    // Check if the formatted history array is empty.
+    // If it is, use an empty string as required by the backend.
+    // Otherwise, use the formatted array.
+    const historyPayload = formattedHistory.length > 0 ? formattedHistory : "";
+
+    const payload = {
+        query: message,
+        user_role: USER_ROLE,
+        user_id: USER_ID,
+        api_key: API_KEY,
+        top_k: 10,
+        include_sources: true,
+        chat_history: [], // <-- Use the new historyPayload variable
+        final_response: "",
+        prompt_from_user: "",
+        cloud_call: true,
+        voice: false
+    };
+
+    console.log("Sending payload to orchestrator:", payload);
+
+    try {
+        const response = await axios.post(ORCHESTRATE_API_URL, payload);
+        return response.data.response;
+    } catch (error) {
+        console.error("Error sending message to orchestrator:", error);
+        if (error.response) {
+            return `Lỗi từ máy chủ: ${error.response.data.detail || error.message}`;
+        } else if (error.request) {
+            return "Không thể kết nối tới máy chủ. Vui lòng kiểm tra lại kết nối.";
+        } else {
+            return "Đã có lỗi xảy ra. Vui lòng thử lại.";
+        }
+    }
 };
