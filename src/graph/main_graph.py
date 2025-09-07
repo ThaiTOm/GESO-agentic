@@ -40,6 +40,67 @@ class ToolRouterDecision(BaseModel):
 
 # --- Node Definitions for the Graph ---
 
+async def update_history_and_summarize_node(state: OrchestratorState) -> dict:
+    """
+    Node 5: Updates the chat history and generates a new conversation summary.
+    This runs just before the graph ends, preparing the state for the next turn.
+    """
+    print("--- NODE: Update History & Summarize ---")
+
+    # 1. Get current state values, providing defaults
+    user_query = state.get("query", "")
+    final_response = state.get("final_response", "")
+    # Your history is a list of dicts, so we handle it as such
+    chat_history = state.get("chat_history", [])
+    current_summary = state.get("conversation_summary", "Đây là lượt đầu tiên của cuộc trò chuyện.")
+
+    # Ensure final_response is a string for the history
+    if isinstance(final_response, dict):
+        response_text = final_response.get("answer", str(final_response))
+    else:
+        response_text = str(final_response)
+
+    # 2. Append the latest exchange to the chat history as dictionaries
+    # This matches your `OrchestratorState` type hint: `list[dict]`
+    chat_history.append({"role": "user", "content": user_query})
+    chat_history.append({"role": "assistant", "content": response_text})
+
+    # 3. Create a prompt to update the summary
+    summary_prompt = ChatPromptTemplate.from_template(
+        """
+        Bạn là một trợ lý tóm tắt cuộc trò chuyện.
+        Dựa trên bản tóm tắt trước đó và cuộc trao đổi mới nhất giữa người dùng và AI, hãy tạo ra một bản tóm tắt mới, súc tích và cập nhật.
+        Hãy giữ lại những thông tin quan trọng từ bản tóm tắt cũ và tích hợp thêm thông tin mới.
+
+        Bản tóm tắt trước đó:
+        "{current_summary}"
+
+        Cuộc trao đổi mới nhất:
+        - Người dùng: "{user_query}"
+        - AI: "{new_response}"
+
+        Bản tóm tắt mới cập nhật:
+        """
+    )
+
+    summarizer_chain = summary_prompt | llm | StrOutputParser()
+
+    # 4. Invoke the chain to get the new summary
+    new_summary = await summarizer_chain.ainvoke({
+        "current_summary": current_summary,
+        "user_query": user_query,
+        "new_response": response_text
+    })
+
+    print(f"--- NEW SUMMARY: {new_summary} ---")
+
+    # 5. Return the updated history and summary to be saved in the state
+    return {
+        "chat_history": chat_history,
+        "conversation_summary": new_summary
+    }
+
+
 async def authorization_node(state: OrchestratorState) -> dict:
     """
     Node 1: The security gate. Checks if the user's query is permitted based on their role.
@@ -90,30 +151,36 @@ async def tool_router_node(state: OrchestratorState) -> dict:
     """
     print("--- NODE: Tool Router ---")
     query = state['query']
+    # --- NEW: Get the summary from the state ---
+    conversation_summary = state.get("conversation_summary", "Đây là lượt đầu tiên của cuộc trò chuyện.")
 
     parser = PydanticOutputParser(pydantic_object=ToolRouterDecision)
 
-
-    ### MODIFIED: Updated the prompt to include the new 'retrieval_from_database' tool ###
-    # REVISED: A single, cleaner prompt template
     prompt_template = ChatPromptTemplate.from_template(
         """
         You are an expert tool router. The user query has already been approved for access.
-        Your job is to decide which tool to use from user query from the following options:
-        
+        Your job is to decide which tool to use from the following options.
+
+        --- CONVERSATION CONTEXT (SUMMARY) ---
+        {conversation_summary}
+        --- END OF CONTEXT ---
+
+        Based on the context above and the new user query below, choose the most appropriate tool.
+
+        Tool Options:
         1. `retrieval_from_database`: Dùng để truy vấn các thông tin cụ thể, có tính thực tế và đã tồn tại trong cơ sở dữ liệu có cấu trúc. Công cụ này trả lời các câu hỏi về tài chính, báo cáo, và các thông tin như: doanh thu, số lượng, chi tiết khách hàng, thông tin sản phẩm, ngành hàng. Các câu hỏi thường bắt đầu bằng "Bao nhiêu...?", "Là gì...?", "Ai...?", "Liệt kê...", "Tìm...".
         Từ khóa: Cái gì, Bao nhiêu, Bao nhiêu, Tìm, Hiển thị, Liệt kê, Nhận, Chi tiết, Giá, Đếm, Tổng, Tổng cộng.
         Dấu hiệu nhận biết: số lượng, tổng, đếm, giá, chi tiết, thông tin, khách hàng, sản phẩm, ngành hàng, kênh bán hàng (hỏi về một con số hoặc danh sách cụ thể tại một thời điểm).
-        
+
         2. `rag`: Dùng cho các câu hỏi về tài liệu, thông tin chung, chính sách (CTKM/CSBH), thông tin sản phẩm, v.v.
         Từ khóa: Chính sách, Tóm tắt, Giải thích, Chi tiết về, Cách thực hiện, Hướng dẫn, Mô tả, Thông tin về.
         Dấu hiệu nhận biết: chính sách, quy định, hướng dẫn, tóm tắt, giải thích, mô tả, thông tin về (nội dung văn bản).
-        
+
         3. `analysis`: dùng để phân tích những báo cáo tài chính của doanh nghiệp, những mảng kinh doanh, dự đoán, phân tích doanh số, 
         chỉ báo cho người dùng (theo tháng, quý, năm), các xu hướng và nhận định cho sản phẩm, thị trường hoặc báo cáo nào đó.
-        
-        **User Query: "{query}"**
-        
+
+        **New User Query: "{query}"**
+
         {format_instructions}
         """
     )
@@ -122,7 +189,8 @@ async def tool_router_node(state: OrchestratorState) -> dict:
 
     decision = await router_chain.ainvoke({
         "query": query,
-        "format_instructions": parser.get_format_instructions()  # This provides the JSON schema instructions
+        "conversation_summary": conversation_summary,
+        "format_instructions": parser.get_format_instructions()
     })
     # print(decision)
 
@@ -133,6 +201,7 @@ async def tool_router_node(state: OrchestratorState) -> dict:
     print(f"--- ROUTER DECISION: Tool='{tool_name}' ---")
 
     tool_input = {}
+    query = f"***summarize conversation***: {conversation_summary}, **user_query**: {query}"
     ### MODIFIED: Added logic to handle the new tool and prepare its input ###
     if tool_name in ["rag", "retrieval_from_database"]:
         # Both RAG and DB retrieval can use a similar input structure
@@ -140,11 +209,12 @@ async def tool_router_node(state: OrchestratorState) -> dict:
             query=query,
             top_k=state.get("top_k", 10),
             include_sources=state.get("include_sources", True),
-            chat_history=state.get("chat_history", []),
+            chat_history=[],
             prompt_from_user=state.get("prompt_from_user", ""),
             cloud_call=state.get("cloud_call", True),
             voice=state.get("voice", False)
         ).dict()
+        print("The tool input is ", tool_input)
     elif tool_name == "analysis":
         # Prepare the input for the Analysis API
         tool_input = {"aggregation_level": decision.aggregation_level}
@@ -304,7 +374,6 @@ def should_summarize_analysis(state: OrchestratorState) -> Literal["summarize", 
 
 
 # --- Graph Assembly ---
-
 def build_graph():
     """
     This function assembles all the nodes and edges into a runnable LangGraph application.
@@ -316,6 +385,8 @@ def build_graph():
     workflow.add_node("tool_router", tool_router_node)
     workflow.add_node("api_caller", api_caller_node)
     workflow.add_node("summarizer", summarize_and_filter_analysis_node)
+    # --- NEW: Add the history/summary node ---
+    workflow.add_node("history_summarizer", update_history_and_summarize_node)
 
     # 2. Set the entry point
     workflow.set_entry_point("authorization_checker")
@@ -326,7 +397,7 @@ def build_graph():
         check_authorization,
         {
             "authorized": "tool_router",
-            "unauthorized": END,
+            "unauthorized": END, # Unauthorized queries don't need a history update
         }
     )
 
@@ -339,12 +410,18 @@ def build_graph():
         should_summarize_analysis,
         {
             "summarize": "summarizer",
-            "end": END,
+            # --- MODIFIED: Route to history_summarizer instead of END ---
+            "end": "history_summarizer",
         }
     )
 
-    # 6. After the summarizer runs, the process is finished
-    workflow.add_edge("summarizer", END)
+    # 6. After the 'analysis' summarizer runs, go to the history node
+    # --- MODIFIED: Route to history_summarizer instead of END ---
+    workflow.add_edge("summarizer", "history_summarizer")
+
+    # 7. The history/summary node is the new final step before the graph finishes for the turn
+    # --- NEW ---
+    workflow.add_edge("history_summarizer", END)
 
     # Compile and return the graph
     graph = workflow.compile()

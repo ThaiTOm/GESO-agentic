@@ -7,8 +7,8 @@ import google.generativeai as genai
 import httpx
 import json
 import logging
+import threading
 from typing import Type, TypeVar, List, Optional
-import random
 
 from google.generativeai import GenerationConfig
 from pydantic import BaseModel, ValidationError
@@ -64,7 +64,6 @@ class GeminiService:
             finally:
                 self.active_requests -= 1
 
-    # --- ADDED: Synchronous API call ---
     def call_api_sync(self, prompt: str, max_output_tokens: int, temperature: float) -> Optional[GenerateContentResponse]:
         """
         Makes a SYNCHRONOUS API call. This is required for LangChain's _generate method.
@@ -90,7 +89,7 @@ class GeminiService:
 class GeminiServicePool:
     """
     Manages a pool of GeminiService instances and routes requests.
-    Now includes both synchronous and asynchronous routing methods.
+    Uses a round-robin strategy to cycle through services for each call.
     """
 
     def __init__(self, api_keys: List[str], model_name: str, max_concurrent_per_key: int):
@@ -100,25 +99,48 @@ class GeminiServicePool:
             GeminiService(api_key, model_name, max_concurrent_per_key)
             for api_key in api_keys
         ]
-        logging.info(f"GeminiServicePool initialized with {len(self.services)} services.")
+        # --- NEW: State for round-robin selection ---
+        self.next_service_index = 0
+        # A lock to prevent race conditions when multiple concurrent calls try to get the next service
+        self.selection_lock = threading.Lock()
+        logging.info(
+            f"GeminiServicePool initialized with {len(self.services)} services "
+            f"using a round-robin routing strategy."
+        )
 
-    def _get_least_busy_service(self) -> GeminiService:
-        """Finds the service with the minimum number of active async requests."""
-        return min(self.services, key=lambda service: service.active_requests)
+    # --- NEW: Round-robin selection logic ---
+    def _get_next_service_round_robin(self) -> GeminiService:
+        """
+        Atomically gets the next service in the list in a round-robin fashion.
+        This method is thread-safe.
+        """
+        with self.selection_lock:
+            # Select the service at the current index
+            service = self.services[self.next_service_index]
+            # Increment the index for the next call, wrapping around if necessary
+            self.next_service_index = (self.next_service_index + 1) % len(self.services)
+            logging.info(f"Routing to {service.service_id}. Next index will be {self.next_service_index}.")
+            return service
 
+    # --- REMOVED: No longer needed ---
+    # def _get_least_busy_service(self) -> GeminiService:
+    #     """Finds the service with the minimum number of active async requests."""
+    #     return min(self.services, key=lambda service: service.active_requests)
+
+    # --- MODIFIED: Use the new round-robin strategy ---
     async def route_call_async(self, prompt: str, max_output_tokens: int, temperature: float) -> Optional[AsyncGenerateContentResponse]:
         """
-        Selects the least busy service and delegates the ASYNC API call to it.
+        Selects the next service using round-robin and delegates the ASYNC API call to it.
         """
-        selected_service = self._get_least_busy_service()
+        selected_service = self._get_next_service_round_robin()
         return await selected_service.call_api_async(prompt, max_output_tokens, temperature)
 
-    # --- ADDED: Synchronous routing ---
+    # --- MODIFIED: Use the new round-robin strategy ---
     def route_call_sync(self, prompt: str, max_output_tokens: int, temperature: float) -> Optional[GenerateContentResponse]:
         """
-        Selects a random service and delegates the SYNC API call to it.
+        Selects the next service using round-robin and delegates the SYNC API call to it.
         """
-        selected_service = random.choice(self.services)
+        selected_service = self._get_next_service_round_robin()
         return selected_service.call_api_sync(prompt, max_output_tokens, temperature)
 
 
@@ -127,7 +149,7 @@ class GeminiServicePool:
 service_pool = GeminiServicePool(
     api_keys=settings.GEMINI_API_KEY,
     model_name=settings.GEMINI_MODEL_NAME,
-    max_concurrent_per_key=2
+    max_concurrent_per_key=1
 )
 
 # --- DEPRECATED FUNCTIONS ---

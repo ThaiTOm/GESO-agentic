@@ -1,10 +1,10 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import List, Dict, Optional, Any, Union, TypedDict, Literal
 from datetime import datetime
 
 
 # The state is a dictionary that tracks data as it moves through the graph.
-class OrchestratorState(TypedDict):
+class OrchestratorState(TypedDict, total=False):
     query: str
     user_role: str
     user_id: str
@@ -21,6 +21,7 @@ class OrchestratorState(TypedDict):
     prompt_from_user: str
     cloud_call: bool
     voice: bool
+    conversation_summary: str
 
 
 class OrchestratorRequest(BaseModel):
@@ -35,7 +36,12 @@ class OrchestratorRequest(BaseModel):
     prompt_from_user: str = ""
     cloud_call: bool = True
     voice: bool = False
+    conversation_summary: str
+
 
 
 class OrchestratorResponse(BaseModel):
     response: Any
+
+    chat_history: list[dict] = Field(description="The complete, updated chat history.")
+    conversation_summary: str = Field(description="The new, updated conversation summary.")

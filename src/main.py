@@ -60,7 +60,10 @@ async def orchestrate_query(request: OrchestratorRequest):
 
     # If the user was authorized, the graph ran to completion.
     # Return the final response from the tool.
-    return OrchestratorResponse(response=final_state.get("final_response"))
-
+    return OrchestratorResponse(
+        response=final_state.get("final_response"),
+        chat_history=final_state.get("chat_history", []),
+        conversation_summary=final_state.get("conversation_summary", "")
+    )
 # To run this server from your terminal:
 # uvicorn main:app --host 0.0.0.0 --port 8001 --reload

@@ -82,13 +82,7 @@ class LLMModels:
     - Local models: requires a base_url and api_key
     """
     # Local models
-    local_model = OpenAIModel(
-        model_name="leon-se/gemma-3-12b-it-FP8-Dynamic",
-        provider=OpenAIProvider(
-            base_url="http://localhost:2626/v1",
-            api_key="i-no-need-no-key-bruh"
-        )
-    )
+
 
     # Gemini models
     gemini_key = " "
@@ -100,11 +94,10 @@ class LLMModels:
                                       )
 
     # OpenRouter models
-    open_router_key = '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'
 
     open_router_provider = OpenAIProvider(
         base_url='https://openrouter.ai/api/v1',
-        api_key=open_router_key
+        api_key=settings.OPEN_ROUTER_KEY
     )
 
     or_gemini_flash = OpenAIChatModel(
@@ -120,7 +113,7 @@ class LLMModels:
                                     )
     or_gemma_3_27b_paid = OpenAIModel('google/gemma-3-27b-it',
                                       provider=OpenAIProvider(base_url='https://openrouter.ai/api/v1',
-                                                              api_key=open_router_key)
+                                                              api_key=settings.OPEN_ROUTER_KEY)
                                       )
 
     # Groq models

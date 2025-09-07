@@ -4,7 +4,6 @@ import axios from 'axios';
 const ORCHESTRATE_API_URL = 'http://ai.tvssolutions.vn:8001/orchestrate';
 
 // --- Configuration ---
-const API_KEY = "CxEE3xRCV9UswOrjQO3R3vjOhkzz1cLf";
 const USER_ID = "duythai";
 const USER_ROLE = "duythai";
 
@@ -37,18 +36,13 @@ const formatChatHistory = (messages) => {
 /**
  * Sends a query and the chat context to the main orchestrator endpoint.
  * @param {string} message - The current user input.
- * @param {Array<Object>} chatHistory - The entire history of messages from the chat state.
- * @param api_key
- * @returns {Promise<any>} A promise that resolves to the server's response object or an error string.
+ *  @param {Array<Object>} chatHistory - The entire history of messages from the chat state.
+ * @param {string} conversationSummary - The running summary of the conversation. // <-- NEW PARAMETER
+ * @param {string} api_key - The API key for the selected chatbot.
+ * @returns {Promise<any>} A promise that resolves to the server's FULL response object.
  */
-export const sendMessageToServer = async (message, chatHistory, api_key) => {
+export const sendMessageToServer = async (message, chatHistory, conversationSummary, api_key) => {
     const formattedHistory = formatChatHistory(chatHistory);
-
-    // *** THIS IS THE KEY CHANGE ***
-    // Check if the formatted history array is empty.
-    // If it is, use an empty string as required by the backend.
-    // Otherwise, use the formatted array.
-    const historyPayload = formattedHistory.length > 0 ? formattedHistory : "";
 
     const payload = {
         query: message,
@@ -57,8 +51,8 @@ export const sendMessageToServer = async (message, chatHistory, api_key) => {
         api_key: api_key,
         top_k: 10,
         include_sources: true,
-        chat_history: [], // <-- Use the new historyPayload variable
-        final_response: "",
+        chat_history: formattedHistory,
+        conversation_summary: conversationSummary,
         prompt_from_user: "",
         cloud_call: true,
         voice: false
@@ -68,7 +62,7 @@ export const sendMessageToServer = async (message, chatHistory, api_key) => {
 
     try {
         const response = await axios.post(ORCHESTRATE_API_URL, payload);
-        return response.data.response;
+        return response.data;
     } catch (error) {
         console.error("Error sending message to orchestrator:", error);
         if (error.response) {
