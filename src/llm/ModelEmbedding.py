@@ -6,10 +6,12 @@ import numpy as np
 # Base model Embedding
 class EmbeddingModel:
     def __init__(self, model_name: str = settings.EMBEDDING_MODEL):
+        device = "cuda:0" if torch.cuda.is_available() else "cpu"
+        print(device)
         self.model = SentenceTransformer(
             model_name,
             cache_folder=settings.MODEL_CACHE_DIR,
-            device=str(torch.device("cpu" if settings.DEVICE == "cpu" else "cuda"))
+            device=device
         )
         self.batch_size = settings.EMBEDDING_BATCH_SIZE
         self.max_seq_length = settings.EMBEDDING_MAX_SEQ_LENGTH

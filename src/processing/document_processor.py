@@ -1,14 +1,13 @@
 import fitz
-import logging
 import os
-import json
-import re
 import logging
 from typing import Tuple, Optional
 import pandas as pd
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.prompts import ChatPromptTemplate
 
 from config import settings
-from llm.llm_call import get_raw_llm_output
+from llm.llm_langchain import cloud_llm_service
 from context_engine.rag_prompt import SELECT_EXCEL_FILE_PROMPT_TEMPLATE
 
 logger = logging.getLogger(__name__)
@@ -184,12 +183,10 @@ async def select_excel_database(query: str, found_collection: str, cloud: bool =
                The data DataFrame, master DataFrame, the name of the database file, and its description
     """
     import os
-    import pandas as pd
-    import requests
     import json
 
     # Path to the collection's folder
-    collection_folder = os.path.join(settings.TYPESENSE_SAVE_PATH, found_collection)
+    collection_folder = os.path.join(settings.UPLOAD_DIR, found_collection)
 
     # Check if the folder exists
     if not os.path.exists(collection_folder):
@@ -198,10 +195,8 @@ async def select_excel_database(query: str, found_collection: str, cloud: bool =
 
     # Find all database Excel files (only database_no1.xlsx to database_no5.xlsx format)
     db_files = []
-    for i in range(1, 6):  # Up to 5 files: database_no1.xlsx to database_no5.xlsx
-        file_path = os.path.join(collection_folder, f"database_no{i}.xlsx")
-        if os.path.exists(file_path):
-            db_files.append(file_path)
+    for temp in os.listdir(collection_folder):
+        db_files.append(os.path.join(collection_folder, temp))
 
     if not db_files:
         logger.error(f"No database files found in {collection_folder}")
@@ -243,11 +238,15 @@ async def select_excel_database(query: str, found_collection: str, cloud: bool =
         "query": query,
         "db_metadata_json": json.dumps(db_metadata, indent=2)
     })
-
+    print(prompt)
     # Call LLM API to select the database
     try:
-        result = await get_raw_llm_output(prompt, max_tokens=32, cloud=cloud)
-
+        cloud_llm = cloud_llm_service
+        raw_prompt_template = ChatPromptTemplate.from_template("{prompt}")
+        llm_to_use = cloud_llm.bind(max_output_tokens=32)
+        simple_chain = raw_prompt_template | llm_to_use | StrOutputParser()
+        result = await simple_chain.ainvoke({"input_prompt": prompt})
+        print(result)
         raw_text = result.strip()
 
         # Extract just the filename using regex if the response contains more text

@@ -3,8 +3,10 @@ import pandas as pd
 import time
 from pydantic_ai import Agent
 
-from src.llm.provider import LLMModels
-from src.context_engine.rag_prompt import DATA_ANALYST_PANDAS_PROMPT
+from llm.provider import LLMModels
+from context_engine.rag_prompt import DATA_ANALYST_PANDAS_PROMPT
+from utils.helper_rag import format_numbers_in_string
+import numpy as np
 
 class DataAnalystAgent:
     _transform_cache = {}
@@ -95,3 +97,83 @@ class DataAnalystAgent:
         cls._transform_cache[df_hash] = transformed
         return transformed
 
+
+def analyze_dataframe(query: str, df: pd.DataFrame, master_data: str) -> dict:
+    """
+    Phân tích dữ liệu dạng bảng (CSV/Excel).
+    Chỉ sử dụng tool này nếu người dùng hỏi về bảng, con số, dữ liệu dạng bảng.
+    Tool sẽ tự lấy file pickle mới nhất trong working_data/.
+    """
+    # ===== Data Preprocessing =====
+    try:
+        # init class DataAnalystAgent
+        # Chèn Master Data vào vị trí '####'
+        modified_instruction = DataAnalystAgent.default_instruction.replace(
+            "####",
+            f"\n\n--- MASTER DATA --- \n**Master Data:** {master_data} \n\n"
+        )
+
+        # Sau đó gán lại cho class
+        DataAnalystAgent.default_instruction = modified_instruction
+
+        # Sau đó mới tiến hành transform DataFrame
+        df = DataAnalystAgent.transform_df(df)  # Use cached transformation
+    except Exception as e:
+        return {"result": None, "code": "", "error": f"❌ Tiền xử lý DataFrame thất bại: {e}"}
+
+    # ===== Environment Setup =====
+    execution_env = {
+        "df": df.copy(),  # Prevent mutation of original DataFrame
+        "pd": pd,  # Provide pandas as global variable
+        "np": np  # Provide numpy as global variable
+    }
+
+    # ===== Code Generation =====
+    analyst = DataAnalystAgent(model=LLMModels.or_gemini_flash)
+    try:
+        print("this line run 1")
+        prompt = analyst.build_prompt(query=query.lower(), df=df)
+        print("this line run 2")
+        print(prompt)
+        raw_code = analyst.get_agent().run_sync(prompt).output
+        print(raw_code)
+        print("this line run 3")
+
+        code = raw_code.replace('```python', '').replace('```', '').strip()
+
+    except Exception as e:
+        print(e)
+        return {"result": None, "code": "", "error": f"❌ Lỗi sinh mã: {e}"}
+
+    # ===== Code Execution =====
+    try:
+        exec(code, execution_env, execution_env)
+    except KeyError as e:
+        missing_col = str(e).split("'")[1]
+        return {"result": None, "code": code,
+                "error": f"❌ Thiếu cột '{missing_col}'. Các cột có sẵn: {list(df.columns)}"}
+    except Exception as e:
+        return {"result": None, "code": code,
+                "error": f"❌ Lỗi thực thi: {e}\nChi tiết DataFrame:\n- Kiểu dữ liệu: {df.dtypes.to_dict()}"}
+
+    # ===== Result Handling =====
+    result = execution_env.get("result")
+    if not result:
+        return {"result": None, "code": code,
+                "error": "⚠️ Không tìm thấy biến 'result'. Kiểm tra logic mã sinh."}
+
+    # ===== Follow-up Questions ====
+    # follow_up_agent = FollowUpQuestionAgent(model=LLMModels.or_gemini_2_flash)
+    # follow_up_prompt = follow_up_agent.build_prompt(query.lower(), df=df, analysis_result=result)
+    # logger.debug(f'{"#" * 30} follow-up prompt {"#" * 30}')
+    # logger.debug(follow_up_prompt)
+
+    # follow_up_res = follow_up_agent.get_agent().run_sync(
+    #     follow_up_prompt).data  # switch to .output for updated version of pydantic-ai
+    # logger.debug(follow_up_res.model_dump_json(indent=4))
+
+    return {
+        "result": format_numbers_in_string(str(result)),
+        "code": code,
+        "error": None
+    }

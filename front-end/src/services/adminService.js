@@ -2,7 +2,7 @@
 import axios from 'axios';
 
 // !!! QUAN TRỌNG: Thay thế bằng URL backend FastAPI của bạn
-const API_BASE_URL = 'http://localhost:2111/api';
+const API_BASE_URL = 'http://ai.tvssolutions.vn:2111/api/v1';
 
 // --- Quản lý Chatbot ---
 export const getAllChatbots = async () => {

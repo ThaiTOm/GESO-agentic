@@ -1,5 +1,5 @@
 from rag_components.chatbot_manager import get_chatbot_name_by_api_key
-from rag_components.llm_interface import reformulate_query, generate_final_answer
+from rag_components.llm_interface import reformulate_query_with_chain, get_final_answer_chain
 from database.typesense_search import get_all_chunks_of_page, perform_vector_search
 from typing_class.rag_type import *
 from llm.llm_call import get_raw_llm_output
@@ -223,9 +223,13 @@ def search_documents(query_text, top_k=10):
         return {'hits': []}  # Return empty results if search fails
 
 
-def call_llm_api(prompt, max_tokens=256, temperature=0.0):
+async def call_llm_api(prompt, max_tokens=256, temperature=0.0):
     try:
-        result = get_raw_llm_output(prompt, max_tokens=max_tokens)
+        cloud_llm = get_llm_cloud_model_service()
+        raw_prompt_template = ChatPromptTemplate.from_template("{prompt}")
+        llm_to_use = cloud_llm.bind(max_output_tokens=max_tokens)
+        simple_chain = raw_prompt_template | llm_to_use | StrOutputParser()
+        result = await simple_chain.ainvoke({"input_prompt": prompt})
 
         # Extract and return just the generated text
         if "choices" in result and len(result["choices"]) > 0:
@@ -431,8 +435,10 @@ async def process_rag_query(request, api_key, typesense_client) -> Dict[str, Any
     """Orchestrates the entire RAG query process."""
     try:
         collection_name = get_chatbot_name_by_api_key(typesense_client, api_key)
-
-        reformulated_query = await reformulate_query(request.query, request.chat_history)
+        reformulated_query = await reformulate_query_with_chain(
+            query=request.query,
+            chat_history=request.chat_history
+        )
         query_embedding = embeddings_service.encode(reformulated_query).tolist()
 
         hits = perform_vector_search(collection_name, query_embedding, request.top_k, typesense_client)
@@ -442,7 +448,13 @@ async def process_rag_query(request, api_key, typesense_client) -> Dict[str, Any
 
         combined_context, sources = _build_rag_context(hits, query_embedding, typesense_client, collection_name)
 
-        final_answer = await generate_final_answer(reformulated_query, combined_context, cloud=request.cloud_call)
+        final_answer_chain = get_final_answer_chain(use_cloud=request.cloud_call)
+
+        final_answer = await final_answer_chain.ainvoke({
+            "knowledge_chunk": combined_context,
+            "task_prompt": FINAL_ANSWER_PROMPT,
+            "user_query": reformulated_query
+        })
 
         return {
             "query": request.query,

@@ -1,5 +1,5 @@
 SELECT_EXCEL_FILE_PROMPT_TEMPLATE = """
-        Given the user's query: "{query}"
+        Given the user's query: {query}
 
         I need to determine the most appropriate database to answer this query through careful analysis.
 

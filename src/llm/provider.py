@@ -1,21 +1,18 @@
-import os
-from typing import Literal, TypedDict, Annotated
-from dotenv import load_dotenv
-from pydantic_settings import BaseSettings
-
 # LangChain imports
 from langchain_openai import ChatOpenAI
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_community.chat_models import ChatOllama
 from langchain_core.messages import HumanMessage
-
+import random
 # LangGraph imports
-from langgraph.graph import StateGraph, END
-from langgraph.checkpoint.sqlite import SqliteSaver
+from pydantic_ai.models.openai import OpenAIModel, OpenAIChatModel
+from pydantic_ai.providers.openai import OpenAIProvider
+from pydantic_ai.models.gemini import GeminiModel
+from pydantic_ai.providers.google_gla import GoogleGLAProvider
+from pydantic_ai.models.groq import GroqModel
+from pydantic_ai.providers.groq import GroqProvider
 
-from ...config import Settings
-
-settings = Settings()
+from config import settings
 
 class LLMProvider:
     """
@@ -23,7 +20,7 @@ class LLMProvider:
     dựa trên nhà cung cấp được chọn (cloud hoặc local).
     """
 
-    def __init__(self, provider: settings.ProviderType, config: Settings):
+    def __init__(self, provider, config: settings):
         """
         Khởi tạo Provider.
 
@@ -52,10 +49,11 @@ class LLMProvider:
                 temperature=0.7
             )
         elif self.provider == "gemini":
+            selected_api_key = random.choice(settings.GEMINI_API_KEY)
             if self.config.GEMINI_API_KEY == "not-set":
                 raise ValueError("Vui lòng cung cấp GEMINI_API_KEY trong file .env")
             return ChatGoogleGenerativeAI(
-                google_api_key=self.config.GEMINI_API_KEY,
+                google_api_key=selected_api_key,
                 model=self.config.GEMINI_MODEL_NAME,
                 temperature=0.7,
                 convert_system_message_to_human=True  # Bắt buộc cho một số model Gemini
@@ -72,16 +70,6 @@ class LLMProvider:
         Trả về đối tượng LLM đã được khởi tạo.
         """
         return self.llm
-
-
-from pydantic_ai.models.anthropic import AnthropicModel
-from pydantic_ai.providers.anthropic import AnthropicProvider
-from pydantic_ai.models.openai import OpenAIModel
-from pydantic_ai.providers.openai import OpenAIProvider
-from pydantic_ai.models.gemini import GeminiModel
-from pydantic_ai.providers.google_gla import GoogleGLAProvider
-from pydantic_ai.models.groq import GroqModel
-from pydantic_ai.providers.groq import GroqProvider
 
 class LLMModels:
     """
@@ -112,14 +100,23 @@ class LLMModels:
                                       )
 
     # OpenRouter models
-    open_router_key = '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'
+    open_router_key = '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'
+
+    open_router_provider = OpenAIProvider(
+        base_url='https://openrouter.ai/api/v1',
+        api_key=open_router_key
+    )
+
+    or_gemini_flash = OpenAIChatModel(
+        'google/gemini-2.0-flash-exp:free',
+        provider=open_router_provider
+    )
+
     or_gemini_2_flash = OpenAIModel('google/gemini-2.0-flash-001',
-                                    provider=OpenAIProvider(base_url='https://openrouter.ai/api/v1',
-                                                            api_key=open_router_key)
+                                        provider=open_router_provider
                                     )
     or_gemini_2_5_pro = OpenAIModel('google/gemini-2.5-pro-preview-03-25',
-                                    provider=OpenAIProvider(base_url='https://openrouter.ai/api/v1',
-                                                            api_key=open_router_key)
+                                    provider=open_router_provider
                                     )
     or_gemma_3_27b_paid = OpenAIModel('google/gemma-3-27b-it',
                                       provider=OpenAIProvider(base_url='https://openrouter.ai/api/v1',
@@ -129,5 +126,4 @@ class LLMModels:
     # Groq models
     groq_key = " "
     gr_llama3_70b = GroqModel('llama3-70b-8192',
-                              provider=GroqProvider(api_key=groq_key)
-                              )
+                              provider=GroqProvider(api_key=groq_key))

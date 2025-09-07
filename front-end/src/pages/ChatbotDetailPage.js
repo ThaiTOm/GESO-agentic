@@ -97,15 +97,15 @@ const ChatbotDetailPage = () => {
                         ))}
                     </ul>
                 </div>
-                <div className={styles.card}>
-                    <h2><FiSettings /> Các chức năng (Tools)</h2>
-                    <p className={styles.toolDescription}>Chọn các công cụ mà agent này có thể sử dụng.</p>
-                    <div className={styles.toolOptions}>
-                        <label><input type="checkbox" name="tool"/> Phân tích dữ liệu (Excel)</label>
-                        <label><input type="checkbox" name="tool"/> Tìm kiếm Google</label>
-                        <label><input type="checkbox" name="tool"/> Chat bằng giọng nói</label>
-                    </div>
-                </div>
+                {/*<div className={styles.card}>*/}
+                {/*    <h2><FiSettings /> Các chức năng (Tools)</h2>*/}
+                {/*    <p className={styles.toolDescription}>Chọn các công cụ mà agent này có thể sử dụng.</p>*/}
+                {/*    <div className={styles.toolOptions}>*/}
+                {/*        <label><input type="checkbox" name="tool"/> Phân tích dữ liệu (Excel)</label>*/}
+                {/*        <label><input type="checkbox" name="tool"/> Tìm kiếm Google</label>*/}
+                {/*        <label><input type="checkbox" name="tool"/> Chat bằng giọng nói</label>*/}
+                {/*    </div>*/}
+                {/*</div>*/}
             </div>
         </div>
     );

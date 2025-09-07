@@ -5,6 +5,7 @@ import ChatPage from './pages/ChatPage';
 import AdminPage from './pages/AdminPage';
 import ChatbotDetailPage from './pages/ChatbotDetailPage'; // Import trang mới
 import AppLayout from './layouts/AppLayout';
+import ChatInterface from './components/chat/ChatInterface';
 
 function App() {
     return (
@@ -12,7 +13,7 @@ function App() {
             <Routes>
                 <Route path="/" element={<HomePage />} />
                 <Route element={<AppLayout />}>
-                    <Route path="/chat" element={<ChatPage />} />
+                    <Route path="/chat" element={<ChatInterface />} />
                     <Route path="/admin" element={<AdminPage />} />
                     {/* Route mới cho trang chi tiết chatbot */}
                     <Route path="/admin/:chatbotName" element={<ChatbotDetailPage />} />

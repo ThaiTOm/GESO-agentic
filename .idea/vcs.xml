@@ -3,6 +3,5 @@
   <component name="VcsDirectoryMappings">
     <mapping directory="$PROJECT_DIR$" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/langchain-academy" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/src/tools/chattest/p02-chatbot" vcs="Git" />
   </component>
 </project>

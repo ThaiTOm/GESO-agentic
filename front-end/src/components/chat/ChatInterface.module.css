@@ -1,0 +1,71 @@
+.chatContainer {
+    display: flex;
+    flex-direction: column;
+    height: 100vh; /* Make the chat take up the full screen height */
+    max-width: 800px;
+    margin: 0 auto;
+    background-color: #ffffff;
+    border-left: 1px solid #e0e0e0;
+    border-right: 1px solid #e0e0e0;
+    box-shadow: 0 0 15px rgba(0,0,0,0.1);
+}
+
+.messagesArea {
+    flex-grow: 1; /* This makes the message area fill the available space */
+    overflow-y: auto; /* Adds a scrollbar if messages overflow */
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.inputArea {
+    border-top: 1px solid #e0e0e0;
+    background-color: #f9f9f9;
+}
+
+/*
+  Styles for the typing indicator.
+  We need a separate wrapper class to align it correctly (to the left).
+*/
+.messageWrapperBot {
+    display: flex;
+    justify-content: flex-start;
+    width: 100%;
+}
+
+.typingIndicator {
+    display: flex;
+    align-items: center;
+    background-color: #f1f0f0;
+    padding: 10px 15px;
+    border-radius: 18px;
+    width: fit-content;
+}
+
+.typingIndicator span {
+    height: 8px;
+    width: 8px;
+    margin: 0 2px;
+    background-color: #9e9ea1;
+    border-radius: 50%;
+    opacity: 0.4;
+    animation: bounce 1.4s infinite ease-in-out both;
+}
+
+.typingIndicator span:nth-of-type(1) {
+    animation-delay: -0.32s;
+}
+
+.typingIndicator span:nth-of-type(2) {
+    animation-delay: -0.16s;
+}
+
+@keyframes bounce {
+    0%, 80%, 100% {
+        transform: scale(0);
+    }
+    40% {
+        transform: scale(1.0);
+    }
+}

@@ -4,6 +4,9 @@ from utils import helper_rag
 from typing_class.rag_type import *
 from database.typesense_declare import get_typesense_instance_service
 from rag_components.chatbot_manager import *
+from config import settings
+import aiofiles
+import os
 
 # Initialize logger
 logger = logging.getLogger(__name__)
@@ -83,8 +86,19 @@ async def get_chatbot_documents(
             )
             for hit in result.get("hits", []) if (doc := hit.get("document"))
         ]
+        documents.extend([
+            Document(
+                document_id=temp,
+                file_name=temp,
+                file_type="excel",  # FIX: Use stored file type
+                chunk_text="none",
+                chunk_num=1
+            )
+            for temp in os.listdir(os.path.join(settings.UPLOAD_DIR, chatbot_name))
+        ])
         return {"status": "success", "chatbot_id": chatbot_name, "documents": documents}
     except Exception as e:
+        print(e)
         raise HTTPException(status_code=500, detail=f"Error retrieving documents for chatbot {chatbot_name}: {e}")
 
 
@@ -92,19 +106,42 @@ async def get_chatbot_documents(
 async def process_pdf_endpoint(chatbot_name: str, file: UploadFile = File(...), typesense_client: Any = Depends(get_typesense_client)):
     """Upload và xử lý file PDF, index vào collection của chatbot."""
     try:
-        result = await helper_rag.process_and_index_pdf(chatbot_name, file, typesense_client)
-        return {
-            "status": "success",
-            "message": "PDF processed and indexed successfully",
-            "document_id": result["document_id"],
-            "file_name": result["file_name"],
-            "num_chunks": result["num_chunks"],
-            "file_type": "pdf"
-        }
+        if file.filename.split(".")[-1] == "pdf":
+            result = await helper_rag.process_and_index_pdf(chatbot_name, file, typesense_client)
+            return {
+                "status": "success",
+                "message": "PDF processed and indexed successfully",
+                "document_id": result["document_id"],
+                "file_name": result["file_name"],
+                "num_chunks": result["num_chunks"],
+                "file_type": "pdf"
+            }
+        else:
+            chatbot_directory = os.path.join(settings.UPLOAD_DIR, chatbot_name)
+            os.makedirs(chatbot_directory, exist_ok=True)
+            print(file)
+            destination_path = os.path.join(chatbot_directory, file.filename)
+
+            try:
+                async with aiofiles.open(destination_path, 'wb') as out_file:
+                    while content := await file.read(1024):
+                        await out_file.write(content)
+            except Exception as e:
+                return {"error": f"Could not save file: {e}"}
+
+            return {
+                "status": "success",
+                "message": "File processed and indexed successfully",
+                "document_id": "",
+                "file_name": "",
+                "num_chunks": 1,
+                "file_type": "excel"
+            }
+
     except helper_rag.DocumentProcessingError as e:
         raise HTTPException(status_code=500, detail=str(e))
-    except Exception:
-        raise HTTPException(status_code=500, detail="An unexpected error occurred during file processing.")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"An unexpected error occurred during file processing. {e}")
 
 # ===================================================
 # [Group 3] Search and Tools endpoints

@@ -1,10 +1,10 @@
 import axios from 'axios';
 
 // The endpoint for the orchestrator
-const ORCHESTRATE_API_URL = 'http://localhost:8001/orchestrate';
+const ORCHESTRATE_API_URL = 'http://ai.tvssolutions.vn:8001/orchestrate';
 
 // --- Configuration ---
-const API_KEY = "KlUHJW7mzjJ6kLXxxraIWqNANH5xO6cH";
+const API_KEY = "CxEE3xRCV9UswOrjQO3R3vjOhkzz1cLf";
 const USER_ID = "duythai";
 const USER_ROLE = "duythai";
 
@@ -38,9 +38,10 @@ const formatChatHistory = (messages) => {
  * Sends a query and the chat context to the main orchestrator endpoint.
  * @param {string} message - The current user input.
  * @param {Array<Object>} chatHistory - The entire history of messages from the chat state.
+ * @param api_key
  * @returns {Promise<any>} A promise that resolves to the server's response object or an error string.
  */
-export const sendMessageToServer = async (message, chatHistory) => {
+export const sendMessageToServer = async (message, chatHistory, api_key) => {
     const formattedHistory = formatChatHistory(chatHistory);
 
     // *** THIS IS THE KEY CHANGE ***
@@ -53,7 +54,7 @@ export const sendMessageToServer = async (message, chatHistory) => {
         query: message,
         user_role: USER_ROLE,
         user_id: USER_ID,
-        api_key: API_KEY,
+        api_key: api_key,
         top_k: 10,
         include_sources: true,
         chat_history: [], // <-- Use the new historyPayload variable

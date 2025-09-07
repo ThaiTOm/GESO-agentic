@@ -1,0 +1,35 @@
+.chatHeader {
+    padding: 1rem;
+    background-color: #f7f7f7;
+    border-bottom: 1px solid #e0e0e0;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.selectorContainer {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    max-width: 500px;
+    margin: 0 auto;
+}
+
+.selectorContainer label {
+    font-weight: bold;
+    color: #333;
+    white-space: nowrap; /* Prevents the label from wrapping */
+}
+
+.chatbotSelect {
+    flex-grow: 1;
+    padding: 0.5rem;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    background-color: #fff;
+    font-size: 1rem;
+}
+
+.chatbotSelect:disabled {
+    background-color: #e9ecef;
+    cursor: not-allowed;
+}

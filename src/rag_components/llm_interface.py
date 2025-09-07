@@ -9,53 +9,78 @@ from context_engine.rag_prompt import (
     REFORMULATION_PROMPT
 )
 
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.runnables import Runnable
+from llm.llm_langchain import cloud_llm_service
+
+cloud_llm = cloud_llm_service
+
+
 def generate_classification_prompt(query: str) -> str:
     return CLASSIFICATION_SELECT_FILE_PROMPT.format(query=query)
 
-async def generate_pandas_code(prompt: str) -> str:
-    full_prompt = f"{PANDAS_CODE_GENERATION_PROMPT}\n\nUser query: {prompt}"
-    result = await get_raw_llm_output(full_prompt, max_tokens=1024, cloud=not settings.SELF_HOST)
-    # Extract the generated text
-    content = result["choices"][0]["text"].strip()
+pandas_code_prompt = ChatPromptTemplate.from_template(
+    f"{PANDAS_CODE_GENERATION_PROMPT}\n\nUser query: {{user_query}}"
+)
 
-    # Optionally extract code block if wrapped in triple backticks
-    if "```" in content:
-        return content.split("```")[1].strip().replace("python", "").strip()
+def _extract_code_from_markdown(text: str) -> str:
+    """Extracts code from a markdown code block."""
+    text = text.strip()
+    if "```" in text:
+        return text.split("```")[1].strip().replace("python", "").strip()
+    return text
 
-    print("=>>>>>>>>>>>>>>>content", content.strip())
-    return content.strip()
+pandas_chain_cloud = (
+    pandas_code_prompt
+    | cloud_llm.bind(max_output_tokens=1024)
+    | StrOutputParser()
+    | _extract_code_from_markdown # Pipe the output into our helper!
+)
+
+# 1. Define the prompt template with multiple input variables
+final_answer_prompt = ChatPromptTemplate.from_template(
+    """Knowledge base: <<{knowledge_chunk}>>
+    Your task: <<{task_prompt}>>
+    User query: <<{user_query}>>
+    Your answer:
+    """
+)
+
+# 2. Create the chain (we'll make one and select the LLM during use)
+def get_final_answer_chain(use_cloud: bool) -> Runnable:
+    llm_to_use = cloud_llm
+    return (
+        final_answer_prompt
+        | llm_to_use.bind(max_output_tokens=1024) # Use max_output_tokens for Gemini
+        | StrOutputParser()
+        | _extract_code_from_markdown # Reuse our helper
+    )
 
 
+reformulation_prompt = ChatPromptTemplate.from_template(REFORMULATION_PROMPT) # Assuming the prompt has {chat_history} and {query}
 
-async def generate_final_answer(user_query: str, result_chunk: str, cloud=False) -> str:
-    full_prompt = f"""Knowledge base: <<{result_chunk}>>
-                      Your task: <<{FINAL_ANSWER_PROMPT}
-                      User query: <<{user_query}>>
-                      Your answer:
-                      """
-    print("*" * 100)
-    print("==> full_prompt: ", full_prompt)
-    result = await get_raw_llm_output(prompt=full_prompt, max_tokens=1024, cloud=cloud)
+# 2. Create the chain
+llm_for_reformulation = cloud_llm
+reformulation_chain = (
+    reformulation_prompt
+    | llm_for_reformulation.bind(max_output_tokens=256)
+    | StrOutputParser()
+)
 
-    # Extract the generated text
-    content = result.strip()
-
-    # Nếu kết quả trả về có bao code block thì tách phần code ra
-    if "```" in content:
-        return content.split("```")[1].strip().replace("python", "").strip()
-    print("*" * 100)
-    return content.strip()
-
-
-
-async def reformulate_query(query: str, chat_history: List[Dict]) -> str:
+# 3. Create the new async function that wraps the logic
+async def reformulate_query_with_chain(query: str, chat_history: List[Dict]) -> str:
     """Reformulates a query to be standalone if chat history exists."""
     if not chat_history:
         return query
 
+    # Prepare inputs for the chain
     recent_history = chat_history[-2:]
     context_str = "\n".join([f"Q: {item['question']}\nA: {item['answer']}" for item in recent_history])
-    prompt = REFORMULATION_PROMPT.format(chat_history=context_str, query=query)
 
-    result = await get_raw_llm_output(prompt, max_tokens=256, cloud=not settings.SELF_HOST)
-    return result.strip()
+    # Invoke the chain
+    reformulated = await reformulation_chain.ainvoke({
+        "chat_history": context_str,
+        "query": query
+    })
+    return reformulated.strip()

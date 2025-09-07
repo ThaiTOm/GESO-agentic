@@ -1,72 +1,160 @@
-# llm_caller.py
+# llm_call.py
+import asyncio
+# --- MODIFIED: Import both sync and async response types for proper hinting ---
+from google.generativeai.types import GenerateContentResponse, AsyncGenerateContentResponse
+
 import google.generativeai as genai
 import httpx
 import json
 import logging
-from typing import Type, TypeVar
-from pydantic import BaseModel, ValidationError
+from typing import Type, TypeVar, List, Optional
+import random
 
-# Assuming this file exists and contains your settings
+from google.generativeai import GenerationConfig
+from pydantic import BaseModel, ValidationError
 from config import settings
 
 # --- Configuration ---
-# This is the standard way to configure the Gemini client.
-# It should be done once when the application starts.
-genai.configure(api_key=settings.GEMINI_API_KEY)
 MODEL_URL = settings.MODEL_URL
-
-# Use a single async httpx client for the application's lifecycle for local calls
 async_http_client = httpx.AsyncClient(timeout=60.0)
-
-# Define a generic TypeVar for Pydantic models to improve type hinting
 T = TypeVar("T", bound=BaseModel)
 
-# --- Core Asynchronous LLM Functions ---
+# --- Core LLM Service and Pool Classes ---
 
-async def cloud_call_async(prompt: str, max_output_tokens: int, temperature: float) -> str:
+class GeminiService:
     """
-    Asynchronously calls the Google Gemini API using the standard SDK.
-    This is the correct, "default" implementation.
+    Represents a single worker for the Gemini API using one API key.
+    Now includes both synchronous and asynchronous calling methods.
     """
-    try:
-        # 1. Instantiate the generative model
-        model = genai.GenerativeModel(settings.GEMINI_MODEL_NAME)
 
-        # 2. Create the generation configuration
-        generation_config = genai.types.GenerationConfig(
-            max_output_tokens=max_output_tokens,
-            temperature=temperature,
+    def __init__(self, api_key: str, model_name: str, max_concurrent_requests: int):
+        self.api_key = api_key
+        self.model_name = model_name
+        self.semaphore = asyncio.Semaphore(max_concurrent_requests)
+        self.active_requests = 0
+        self.service_id = f"Service(key=...{api_key[-4:]})"
+        self.model = genai.GenerativeModel(self.model_name)
+        logging.info(
+            f"{self.service_id} initialized with model '{model_name}' "
+            f"and a concurrency limit of {max_concurrent_requests}."
         )
 
-        # 3. Call the asynchronous generation method on the model instance
-        response = await model.generate_content_async(
-            prompt,
-            generation_config=generation_config
-        )
+    async def call_api_async(self, prompt: str, max_output_tokens: int, temperature: float) -> Optional[AsyncGenerateContentResponse]:
+        """
+        Acquires a semaphore lock and makes an ASYNCHRONOUS API call.
+        """
+        async with self.semaphore:
+            self.active_requests += 1
+            logging.info(f"{self.service_id} | Starting async request. Active requests: {self.active_requests}")
+            try:
+                genai.configure(api_key=self.api_key)
+                generation_config = GenerationConfig(
+                    max_output_tokens=max_output_tokens,
+                    temperature=temperature,
+                )
+                response = await self.model.generate_content_async(
+                    prompt,
+                    generation_config=generation_config
+                )
+                logging.info(f"{self.service_id} | Async request finished successfully.")
+                return response
+            except Exception as e:
+                logging.error(f"{self.service_id} | Error calling Google Gemini API (async): {e}")
+                return None
+            finally:
+                self.active_requests -= 1
 
-        # 4. Return the text part of the response
-        return response.text
-    except Exception as e:
-        logging.error(f"Error calling Google Gemini API: {e}")
-        # Return an empty string to prevent crashes downstream
-        return ""
+    # --- ADDED: Synchronous API call ---
+    def call_api_sync(self, prompt: str, max_output_tokens: int, temperature: float) -> Optional[GenerateContentResponse]:
+        """
+        Makes a SYNCHRONOUS API call. This is required for LangChain's _generate method.
+        """
+        logging.info(f"{self.service_id} | Starting sync request.")
+        try:
+            genai.configure(api_key=self.api_key)
+            generation_config = GenerationConfig(
+                max_output_tokens=max_output_tokens,
+                temperature=temperature,
+            )
+            response = self.model.generate_content(
+                prompt,
+                generation_config=generation_config
+            )
+            logging.info(f"{self.service_id} | Sync request finished successfully.")
+            return response
+        except Exception as e:
+            logging.error(f"{self.service_id} | Error calling Google Gemini API (sync): {e}")
+            return None
+
+
+class GeminiServicePool:
+    """
+    Manages a pool of GeminiService instances and routes requests.
+    Now includes both synchronous and asynchronous routing methods.
+    """
+
+    def __init__(self, api_keys: List[str], model_name: str, max_concurrent_per_key: int):
+        if not api_keys:
+            raise ValueError("API keys list cannot be empty.")
+        self.services = [
+            GeminiService(api_key, model_name, max_concurrent_per_key)
+            for api_key in api_keys
+        ]
+        logging.info(f"GeminiServicePool initialized with {len(self.services)} services.")
+
+    def _get_least_busy_service(self) -> GeminiService:
+        """Finds the service with the minimum number of active async requests."""
+        return min(self.services, key=lambda service: service.active_requests)
+
+    async def route_call_async(self, prompt: str, max_output_tokens: int, temperature: float) -> Optional[AsyncGenerateContentResponse]:
+        """
+        Selects the least busy service and delegates the ASYNC API call to it.
+        """
+        selected_service = self._get_least_busy_service()
+        return await selected_service.call_api_async(prompt, max_output_tokens, temperature)
+
+    # --- ADDED: Synchronous routing ---
+    def route_call_sync(self, prompt: str, max_output_tokens: int, temperature: float) -> Optional[GenerateContentResponse]:
+        """
+        Selects a random service and delegates the SYNC API call to it.
+        """
+        selected_service = random.choice(self.services)
+        return selected_service.call_api_sync(prompt, max_output_tokens, temperature)
+
+
+# --- SINGLETON INSTANCE ---
+# This is the single pool instance that your LangChain model will use.
+service_pool = GeminiServicePool(
+    api_keys=settings.GEMINI_API_KEY,
+    model_name=settings.GEMINI_MODEL_NAME,
+    max_concurrent_per_key=2
+)
+
+# --- DEPRECATED FUNCTIONS ---
+# The functions below are now replaced by your CustomGeminiChatModel and LCEL chains.
+# They are kept here for reference but should no longer be used in your graph.
+
+# async def cloud_call_async(prompt: str, max_output_tokens: int = 100, temperature: float = 0.7):
+#     """DEPRECATED: Use CustomGeminiChatModel.ainvoke() instead."""
+#     response = await service_pool.route_call_async(prompt, max_output_tokens, temperature)
+#     return response.text if response else ""
 
 async def local_call_async(prompt: str, max_tokens: int, temperature: float) -> str:
-    """Asynchronous call to a local model endpoint."""
+    """
+    Asynchronous call to a local model endpoint.
+    NOTE: This should also be wrapped in its own LangChain model (e.g., using ChatOpenAI
+    with a custom api_base) for full integration.
+    """
+    # ... (implementation is fine) ...
     payload = {
-        # This can also be configured from your settings file
-        "model": "leon-se/gemma-3-12b-it-FP8-Dynamic",
-        "prompt": prompt,
-        "max_tokens": max_tokens,
-        "temperature": temperature,
-        "stream": False
+        "model": "leon-se/gemma-3-12b-it-FP8-Dynamic", "prompt": prompt,
+        "max_tokens": max_tokens, "temperature": temperature, "stream": False
     }
     headers = {"Content-Type": "application/json"}
     try:
         response = await async_http_client.post(MODEL_URL, headers=headers, json=payload)
-        response.raise_for_status() # Raise an error for bad responses (4xx or 5xx)
+        response.raise_for_status()
         data = response.json()
-        # Safely access nested dictionary keys to avoid errors
         return data.get("choices", [{}])[0].get("text", "")
     except httpx.RequestError as e:
         logging.error(f"Error calling local model API: {e}")
@@ -74,7 +162,6 @@ async def local_call_async(prompt: str, max_tokens: int, temperature: float) -> 
     except (json.JSONDecodeError, IndexError) as e:
         logging.error(f"Error parsing response from local model API: {e}")
         return ""
-
 
 async def get_structured_llm_output(
     prompt: str,
@@ -123,7 +210,7 @@ async def get_structured_llm_output(
 
 async def get_raw_llm_output(prompt: str, cloud: bool = False, max_tokens: int = 1024) -> str:
     if cloud:
-        response_text = await cloud_call_async(prompt, max_output_tokens=max_tokens, temperature=0.0)
+        response_text = await cloud_call_async(prompt, max_output_tokens=max_tokens, temperature=0.0).text
     else:
         response_text = await local_call_async(prompt, max_tokens=max_tokens, temperature=0.0)
     return response_text.strip()

@@ -3,7 +3,7 @@ from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from utils.logging_config import *
-from routes import rag_routes, analysis_routes
+from routes import rag_routes, analysis_routes, rag_query_routes
 from database.typesense_declare import get_typesense_instance_service
 
 # Initialize Typesense
@@ -34,6 +34,9 @@ app.mount("/uploads", StaticFiles(directory=settings.UPLOAD_DIR), name="uploads"
 # Include your API routers
 app.include_router(rag_routes.router, prefix="/api/v1", tags=["RAG System"])
 app.include_router(analysis_routes.router, prefix="/api/v1", tags=["Data Analysis"])
+
+app.include_router(rag_query_routes.router, prefix="/api/v1", tags=["RAG query System"])
+
 
 # You can add a root endpoint for health checks
 @app.get("/", tags=["Health Check"])
