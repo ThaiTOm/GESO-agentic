@@ -1,6 +1,5 @@
 import hashlib
 import pandas as pd
-import time
 from pydantic_ai import Agent
 
 from llm.provider import LLMModels
@@ -131,14 +130,10 @@ def analyze_dataframe(query: str, df: pd.DataFrame, master_data: str) -> dict:
     # ===== Code Generation =====
     analyst = DataAnalystAgent(model=LLMModels.or_gemini_flash)
     try:
-        print("this line run 1")
         prompt = analyst.build_prompt(query=query.lower(), df=df)
-        print("this line run 2")
         print(prompt)
         raw_code = analyst.get_agent().run_sync(prompt).output
         print(raw_code)
-        print("this line run 3")
-
         code = raw_code.replace('```python', '').replace('```', '').strip()
 
     except Exception as e:
@@ -161,16 +156,6 @@ def analyze_dataframe(query: str, df: pd.DataFrame, master_data: str) -> dict:
     if not result:
         return {"result": None, "code": code,
                 "error": "⚠️ Không tìm thấy biến 'result'. Kiểm tra logic mã sinh."}
-
-    # ===== Follow-up Questions ====
-    # follow_up_agent = FollowUpQuestionAgent(model=LLMModels.or_gemini_2_flash)
-    # follow_up_prompt = follow_up_agent.build_prompt(query.lower(), df=df, analysis_result=result)
-    # logger.debug(f'{"#" * 30} follow-up prompt {"#" * 30}')
-    # logger.debug(follow_up_prompt)
-
-    # follow_up_res = follow_up_agent.get_agent().run_sync(
-    #     follow_up_prompt).data  # switch to .output for updated version of pydantic-ai
-    # logger.debug(follow_up_res.model_dump_json(indent=4))
 
     return {
         "result": format_numbers_in_string(str(result)),
