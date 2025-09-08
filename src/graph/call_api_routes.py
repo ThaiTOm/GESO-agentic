@@ -3,6 +3,7 @@ import os
 from typing import Dict, Any
 from config import settings
 from typing_class.rag_type import QueryRequest
+from typing_class.speaking import SpeakingRequest
 
 BASE_API_URL = settings.API_URL
 
@@ -16,7 +17,7 @@ async def call_database_retrieval_api(request_data: QueryRequest, api_key: str) 
     headers = {"api-key": api_key}
 
     try:
-        response = await client.post(url, json=request_data, headers=headers, timeout=30.0)
+        response = await client.post(url, json=request_data, headers=headers, timeout=100.0)
         response.raise_for_status()
         return response.json()
     except httpx.RequestError as e:
@@ -36,7 +37,6 @@ async def call_rag_api(request_data: QueryRequest, api_key: str) -> Dict[str, An
     except httpx.RequestError as e:
         return {"error": f"An error occurred while calling the RAG API: {str(e)}"}
 
-
 async def call_analysis_api(aggregation_level: str, query) -> Dict[str, Any]:
     """Makes a GET request to your Analysis endpoint."""
     print(f"--- Calling Analysis API with aggregation: {aggregation_level} ---")
@@ -44,7 +44,7 @@ async def call_analysis_api(aggregation_level: str, query) -> Dict[str, Any]:
     params = {"aggregation_level": aggregation_level, "query": query}
 
     try:
-        response = await client.get(url, params=params, timeout=60.0)
+        response = await client.get(url, params=params, timeout=100.0)
         response.raise_for_status()
         return response.json()
     except httpx.RequestError as e:

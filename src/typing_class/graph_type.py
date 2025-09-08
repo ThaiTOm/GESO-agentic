@@ -42,6 +42,5 @@ class OrchestratorRequest(BaseModel):
 
 class OrchestratorResponse(BaseModel):
     response: Any
-
     chat_history: list[dict] = Field(description="The complete, updated chat history.")
     conversation_summary: str = Field(description="The new, updated conversation summary.")

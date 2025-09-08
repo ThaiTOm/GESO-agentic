@@ -13,7 +13,7 @@ router = APIRouter()
 @router.post("/query_rag")
 async def query_analyze_rag_document(request: QueryRequest, api_key: str = Header(...), typesense_client: Any = Depends(get_typesense_client)):
     collection_name = get_chatbot_name_by_api_key(typesense_client, api_key)
-    print(collection_name)
+
     excel_database, master_sheet, selected_db, db_description = await select_excel_database(
         request.query, collection_name)
 

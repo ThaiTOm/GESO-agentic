@@ -1,7 +1,11 @@
+import json
+
 import fitz
 import os
 import logging
 from typing import Tuple, Optional
+
+import numpy as np
 import pandas as pd
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
@@ -116,31 +120,47 @@ def _read_excel_file_data(file_path: str) -> Tuple[Optional[pd.DataFrame], Optio
 
     return data_df, master_df, description, error_message
 
+
+class CustomEncoder(json.JSONEncoder):
+    """
+    Custom JSON encoder to handle special types from pandas and numpy,
+    such as Timestamps, numpy numbers, and NaN values.
+    """
+    def default(self, obj):
+        if isinstance(obj, pd.Timestamp):
+            # Convert pandas Timestamp to an ISO 8601 formatted string
+            return obj.isoformat()
+        if isinstance(obj, np.integer):
+            # Convert numpy integer to a standard Python int
+            return int(obj)
+        if isinstance(obj, np.floating):
+            # Convert numpy float to a standard Python float.
+            # Crucially, check if it's NaN and convert to None (which becomes null in JSON).
+            return None if np.isnan(obj) else float(obj)
+        if isinstance(obj, np.ndarray):
+            # Convert numpy arrays to lists
+            return obj.tolist()
+        # Let the base class default method raise the TypeError for other types
+        return super(CustomEncoder, self).default(obj)
+
+
 def _extract_metadata_from_excel(file_path: str) -> dict | None:
     """
     Extracts metadata from a single Excel file for LLM context.
     Reads only the first few rows for efficiency.
-
-    Args:
-        file_path: The path to the Excel file.
-
-    Returns:
-        A dictionary containing metadata, or None if the file cannot be processed.
     """
     description = ""
     data_df = None
 
-    # Step 1: Try to get the description from the 'master' sheet
     try:
         master_df = pd.read_excel(file_path, sheet_name="master")
         if not master_df.empty:
             description = " ".join(master_df.iloc[0].astype(str).tolist())
-    except ValueError: # This is a more specific error for "sheet not found"
+    except ValueError:
         logger.debug(f"No 'master' sheet in {os.path.basename(file_path)}.")
     except Exception as e:
         logger.warning(f"Could not read master sheet from {os.path.basename(file_path)}: {e}")
 
-    # Step 2: Try to get the data preview from the 'data' sheet or default sheet
     try:
         data_df = pd.read_excel(file_path, sheet_name="data", nrows=5)
     except ValueError:
@@ -149,24 +169,25 @@ def _extract_metadata_from_excel(file_path: str) -> dict | None:
             data_df = pd.read_excel(file_path, nrows=5)
         except Exception as e:
             logger.warning(f"Could not read default sheet for metadata from {os.path.basename(file_path)}: {e}")
-            return None # Critical failure, can't get metadata
+            return None
     except Exception as e:
         logger.warning(f"Could not read 'data' sheet for metadata from {os.path.basename(file_path)}: {e}")
-        return None # Critical failure
+        return None
 
-    # If we couldn't load any dataframe for metadata, we can't proceed with this file.
     if data_df is None:
         return None
 
-    # Step 3: If successful, create and return the metadata dictionary
     metadata = {
         "file_name": os.path.basename(file_path),
         "description": description,
         "columns": list(data_df.columns),
         "sample_data": data_df.head(2).to_dict(orient="records"),
-        "shape": data_df.shape # Note: shape will be (5, num_cols) due to nrows=5
+        "shape": data_df.shape
     }
+    # No changes needed here! The data is returned with its original types.
     return metadata
+
+
 
 
 async def select_excel_database(query: str, found_collection: str, cloud: bool =False) -> tuple:
@@ -219,6 +240,12 @@ async def select_excel_database(query: str, found_collection: str, cloud: bool =
         metadata for file_path in db_files
         if (metadata := _extract_metadata_from_excel(file_path)) is not None
     ]
+    db_metadata_json = json.dumps(
+        db_metadata,
+        indent=2,
+        cls=CustomEncoder,
+        ensure_ascii=False
+    )
 
     # Handle the case where NO metadata could be extracted from ANY file
     if not db_metadata:
@@ -234,34 +261,20 @@ async def select_excel_database(query: str, found_collection: str, cloud: bool =
         return df, master_df, os.path.basename(db_files[0]), description
 
     # Prepare LLM prompt to select the appropriate database
-    prompt = SELECT_EXCEL_FILE_PROMPT_TEMPLATE.format({
-        "query": query,
-        "db_metadata_json": json.dumps(db_metadata, indent=2)
-    })
-    print(prompt)
+    prompt = SELECT_EXCEL_FILE_PROMPT_TEMPLATE.format(
+        query=query,
+        db_metadata_json=db_metadata_json
+    )
+
     # Call LLM API to select the database
     try:
         cloud_llm = cloud_llm_service
         raw_prompt_template = ChatPromptTemplate.from_template("{prompt}")
         llm_to_use = cloud_llm.bind(max_output_tokens=32)
         simple_chain = raw_prompt_template | llm_to_use | StrOutputParser()
-        result = await simple_chain.ainvoke({"input_prompt": prompt})
-        print(result)
-        raw_text = result.strip()
-
-        # Extract just the filename using regex if the response contains more text
-        import re
-        filename_match = re.search(r'(database_no\d+\.xlsx)', raw_text)
-        if filename_match:
-            selected_db = filename_match.group(1)
-        else:
-            # Check if the response is exactly "NONE"
-            if raw_text == "NONE":
-                selected_db = "NONE"
-            else:
-                # LLM didn't follow the format, use first file as fallback
-                logger.warning(f"LLM response did not match expected format: ''")
-                selected_db = os.path.basename(db_files[0])
+        result = await simple_chain.ainvoke({"prompt": prompt})
+        print("File choose is ", result)
+        selected_db = result.strip()
 
         # Validate the selected database
         if selected_db == "NONE":
@@ -281,6 +294,7 @@ async def select_excel_database(query: str, found_collection: str, cloud: bool =
                         break
                 break
 
+        # selected_path = selected_path[
         if selected_path:
             try:
                 # Read both data and master sheets from the selected database

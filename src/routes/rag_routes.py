@@ -119,7 +119,6 @@ async def process_pdf_endpoint(chatbot_name: str, file: UploadFile = File(...), 
         else:
             chatbot_directory = os.path.join(settings.UPLOAD_DIR, chatbot_name)
             os.makedirs(chatbot_directory, exist_ok=True)
-            print(file)
             destination_path = os.path.join(chatbot_directory, file.filename)
 
             try:

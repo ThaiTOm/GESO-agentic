@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 from langgraph.graph import StateGraph, END
 from typing_class.rag_type import QueryRequest
 from typing_class.graph_type import OrchestratorState
-from graph.call_api_routes import call_rag_api, call_analysis_api, call_database_retrieval_api
+from graph.call_api_routes import *
 from context_engine.rag_prompt import DECENTRALIZATION_PROMPT
 
 from types import SimpleNamespace
@@ -192,7 +192,6 @@ async def tool_router_node(state: OrchestratorState) -> dict:
         "conversation_summary": conversation_summary,
         "format_instructions": parser.get_format_instructions()
     })
-    # print(decision)
 
     if not decision:
         return {"tool_to_use": "none", "tool_input": {}}
