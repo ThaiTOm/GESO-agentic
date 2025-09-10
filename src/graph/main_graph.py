@@ -8,6 +8,8 @@ from typing_class.rag_type import QueryRequest
 from typing_class.graph_type import OrchestratorState
 from graph.call_api_routes import *
 from context_engine.rag_prompt import DECENTRALIZATION_PROMPT
+from context_engine.graph_prompt import *
+
 
 from types import SimpleNamespace
 
@@ -65,25 +67,7 @@ async def update_history_and_summarize_node(state: OrchestratorState) -> dict:
     chat_history.append({"role": "user", "content": user_query})
     chat_history.append({"role": "assistant", "content": response_text})
 
-    # 3. Create a prompt to update the summary
-    summary_prompt = ChatPromptTemplate.from_template(
-        """
-        Bạn là một trợ lý tóm tắt cuộc trò chuyện.
-        Dựa trên bản tóm tắt trước đó và cuộc trao đổi mới nhất giữa người dùng và AI, hãy tạo ra một bản tóm tắt mới, súc tích và cập nhật.
-        Hãy giữ lại những thông tin quan trọng từ bản tóm tắt cũ và tích hợp thêm thông tin mới.
-
-        Bản tóm tắt trước đó:
-        "{current_summary}"
-
-        Cuộc trao đổi mới nhất:
-        - Người dùng: "{user_query}"
-        - AI: "{new_response}"
-
-        Bản tóm tắt mới cập nhật:
-        """
-    )
-
-    summarizer_chain = summary_prompt | llm | StrOutputParser()
+    summarizer_chain = SUMMARY_PROMPT | llm | StrOutputParser()
 
     # 4. Invoke the chain to get the new summary
     new_summary = await summarizer_chain.ainvoke({
@@ -155,37 +139,7 @@ async def tool_router_node(state: OrchestratorState) -> dict:
     conversation_summary = state.get("conversation_summary", "Đây là lượt đầu tiên của cuộc trò chuyện.")
 
     parser = PydanticOutputParser(pydantic_object=ToolRouterDecision)
-
-    prompt_template = ChatPromptTemplate.from_template(
-        """
-        You are an expert tool router. The user query has already been approved for access.
-        Your job is to decide which tool to use from the following options.
-
-        --- CONVERSATION CONTEXT (SUMMARY) ---
-        {conversation_summary}
-        --- END OF CONTEXT ---
-
-        Based on the context above and the new user query below, choose the most appropriate tool.
-
-        Tool Options:
-        1. `retrieval_from_database`: Dùng để truy vấn các thông tin cụ thể, có tính thực tế và đã tồn tại trong cơ sở dữ liệu có cấu trúc. Công cụ này trả lời các câu hỏi về tài chính, báo cáo, và các thông tin như: doanh thu, số lượng, chi tiết khách hàng, thông tin sản phẩm, ngành hàng. Các câu hỏi thường bắt đầu bằng "Bao nhiêu...?", "Là gì...?", "Ai...?", "Liệt kê...", "Tìm...".
-        Từ khóa: Cái gì, Bao nhiêu, Bao nhiêu, Tìm, Hiển thị, Liệt kê, Nhận, Chi tiết, Giá, Đếm, Tổng, Tổng cộng.
-        Dấu hiệu nhận biết: số lượng, tổng, đếm, giá, chi tiết, thông tin, khách hàng, sản phẩm, ngành hàng, kênh bán hàng (hỏi về một con số hoặc danh sách cụ thể tại một thời điểm).
-
-        2. `rag`: Dùng cho các câu hỏi về tài liệu, thông tin chung, chính sách (CTKM/CSBH), thông tin sản phẩm, v.v.
-        Từ khóa: Chính sách, Tóm tắt, Giải thích, Chi tiết về, Cách thực hiện, Hướng dẫn, Mô tả, Thông tin về.
-        Dấu hiệu nhận biết: chính sách, quy định, hướng dẫn, tóm tắt, giải thích, mô tả, thông tin về (nội dung văn bản).
-
-        3. `analysis`: dùng để phân tích những báo cáo tài chính của doanh nghiệp, những mảng kinh doanh, dự đoán, phân tích doanh số, 
-        chỉ báo cho người dùng (theo tháng, quý, năm), các xu hướng và nhận định cho sản phẩm, thị trường hoặc báo cáo nào đó.
-
-        **New User Query: "{query}"**
-
-        {format_instructions}
-        """
-    )
-
-    router_chain = prompt_template | llm | parser
+    router_chain = CHOOSE_TOOL_PROMPT | llm | parser
 
     decision = await router_chain.ainvoke({
         "query": query,
@@ -278,20 +232,8 @@ async def summarize_and_filter_analysis_node(state: OrchestratorState) -> dict:
     human_friendly_summary = technical_summary
 
     if technical_summary:
-        summary_prompt = ChatPromptTemplate.from_template(
-            """
-            Bạn là một nhà phân tích kinh doanh hữu ích. Hãy tóm tắt báo cáo kỹ thuật sau thành một đoạn văn rõ ràng, dễ hiểu cho người dùng doanh nghiệp.
-            Tập trung vào những thông tin chi tiết chính, và chỉ cung cấp thông tin theo câu hỏi của người dùng.
-            Không sử dụng markdown. Hãy cung cấp một bản tóm tắt đơn giản, bằng ngôn ngữ tự nhiên.
-    
-            **Câu hỏi của người dùng:** "{user_query}"
-    
-            Technical Report:
-            {technical_report}
-            """
-        )
         summarizer_chain = (
-                summary_prompt
+                TECHNICAL_REPORT_SUMMARY_PROMPT
                 | llm.bind(max_output_tokens=512)  # Pass parameters here!
                 | StrOutputParser()
         )
@@ -311,25 +253,8 @@ async def summarize_and_filter_analysis_node(state: OrchestratorState) -> dict:
     if original_plots:
         available_segments = list(original_plots.keys())
 
-        # 1. Instantiate the parser for the RelevantPlotsDecision model.
         plot_parser = PydanticOutputParser(pydantic_object=RelevantPlotsDecision)
-
-        # 2. Modify the prompt template to include the format instructions placeholder.
-        filter_prompt_template = ChatPromptTemplate.from_template(
-            """
-            You are an intelligent data filter. Your job is to identify which of the available data segments are relevant to the user's query.
-            User's Original Query: "{user_query}"
-            Available Segments: {available_segments}
-            Based on the user's query, which of the "Available Segments" should be shown?
-            - If the user asks a general question like "analyze the trends", then all segments are relevant.
-            - If the user specifically mentions one or more segments (e.g., "how is BÁNH TƯƠI and Kẹo doing?"), then only those are relevant.
-
-            {format_instructions}
-            """
-        )
-
-        # 3. Create the new chain using the parser.
-        plot_filter_chain = filter_prompt_template | llm | plot_parser
+        plot_filter_chain = FILTER_GRAPH_TITLE_PROMPT | llm | plot_parser
 
         # 4. Invoke the chain, passing the format instructions from the parser.
         decision = await plot_filter_chain.ainvoke({

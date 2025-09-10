@@ -153,12 +153,13 @@ def analyze_dataframe(query: str, df: pd.DataFrame, master_data: str) -> dict:
 
     # ===== Result Handling =====
     result = execution_env.get("result")
+    result = format_numbers_in_string(str(result))
     if not result:
         return {"result": None, "code": code,
                 "error": "⚠️ Không tìm thấy biến 'result'. Kiểm tra logic mã sinh."}
 
     return {
-        "result": format_numbers_in_string(str(result)),
+        "result": result,
         "code": code,
         "error": None
     }

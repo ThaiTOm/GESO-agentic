@@ -33,9 +33,17 @@ async def query_analyze_rag_document(request: QueryRequest, api_key: str = Heade
 
     # Pretty the answer
     prompt = ChatPromptTemplate.from_template("""
-    Hãy dựa vào câu trả lời của bạn và câu hỏi của người dùng để viết lại câu trả lời cho đẹp (nếu có danh từ thì hãy viết hoa cho phù hợp), hãy chỉ đưa ra câu trả lời.        
-    **Câu hỏi của người dùng:** "{query}"
-    **Câu trả lời của bạn:** "{answer}"
+    Bạn là một trợ lý chuyên về định dạng văn bản. Nhiệm vụ của bạn là trình bày lại câu trả lời dưới đây một cách chuyên nghiệp và dễ đọc.
+
+    **Yêu cầu định dạng:**
+    - **In đậm:** Sử dụng in đậm cho các tiêu đề chính hoặc các thuật ngữ quan trọng.
+    - **Danh sách:** Sử dụng gạch đầu dòng (-) hoặc danh sách có thứ tự (1., 2.) để liệt kê các ý.
+    - **Viết hoa:** Luôn viết hoa tên riêng, tên người, tên sản phẩm, và các danh từ riêng quan trọng.
+    - **Cấu trúc:** Phân chia nội dung thành các đoạn văn ngắn, có tiêu đề rõ ràng nếu cần.
+    - **Lưu ý:** Tuyệt đối không sử dụng định dạng bảng.
+
+    Hãy định dạng lại câu trả lời sau đây và chỉ xuất ra kết quả cuối cùng.
+    **Câu trả lời:** "{answer}"
     """)
 
     summarizer_chain = (
@@ -46,7 +54,6 @@ async def query_analyze_rag_document(request: QueryRequest, api_key: str = Heade
 
     # 3. Invoke the chain with the necessary inputs
     answer_fn = await summarizer_chain.ainvoke({
-        "query": request.query,
         "answer": answer
     })
 

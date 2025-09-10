@@ -13,7 +13,12 @@ from langchain_core.outputs import ChatResult, ChatGeneration
 
 # Import your service pool and its type from your llm_caller file
 from .llm_call import service_pool, GeminiServicePool
+import os
+from config import settings
 
+os.environ["LANGSMITH_TRACING_V2"] = settings.LANGSMITH_TRACING_V2
+os.environ["LANGSMITH_API_KEY"] = settings.LANGSMITH_API_KEY
+os.environ["LANGSMITH_PROJECT"] = settings.LANGSMITH_PROJECT
 
 class CustomGeminiChatModel(BaseChatModel):
     """
