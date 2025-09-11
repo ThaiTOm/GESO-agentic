@@ -142,7 +142,7 @@ PANDAS_CODE_GENERATION_PROMPT = """
 FINAL_ANSWER_PROMPT = """
         - Bạn là một chuyên gia chăm sóc khách hàng.
         - Dựa trên kiến thức sẵn có, hãy trả lời câu hỏi của người dùng
-        - Trả lời bằng tiếng Việt, ngắn gọn, đủ ý và không thừa thãi, max 1500 từ
+        - Trả lời bằng tiếng Việt, ngắn gọn, đủ ý và không thừa thãi
         - Không thêm các ký tự hoặc nội dung không cần thiết
         - Nếu câu hỏi không nằm trong cơ sở kiến thức, Hãy trả lời tôi không biết.
     """

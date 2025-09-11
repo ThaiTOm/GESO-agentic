@@ -46,3 +46,10 @@
 .toolDescription { margin-bottom: 1rem; color: #6b7280; }
 .toolOptions { display: flex; flex-direction: column; gap: 1rem; }
 .toolOptions label { display: flex; align-items: center; gap: 0.5rem; font-size: 1rem; }
+
+@media (max-width: 768px) {
+    .grid {
+        /* Stacks the two cards vertically on mobile */
+        grid-template-columns: 1fr;
+    }
+}

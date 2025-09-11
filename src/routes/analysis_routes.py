@@ -119,7 +119,7 @@ def format_text_results_to_markdown(analysis_results):
         markdown_output += f"- **Data Points Analyzed**: {trend_info['data_points']}\n\n---\n\n"
     return markdown_output
 
-_, time_series_data = load_and_process_data("quarterly", settings.DA_CHUNK_SIZE)
+_, time_series_data = load_and_process_data("monthly", settings.DA_CHUNK_SIZE)
 
 @router.get("/analysis", summary="Perform Trend Analysis on Business Data")
 def get_analysis(aggregation_level: str = Query("quarterly", enum=["monthly", "quarterly"]), query: str = ""):

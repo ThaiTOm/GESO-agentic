@@ -1,12 +1,62 @@
 .appLayout {
-    display: flex; /* THIS IS THE KEY: Arranges children (Sidebar, main) side-by-side */
-    height: 100vh; /* Makes the entire layout take up the full screen height */
-    background-color: #f4f7fa; /* Light gray background for the content area */
+    display: flex;
+    height: 100vh;
+    background-color: #f4f7fa;
+    position: relative;
+    overflow-x: hidden;
 }
 
 .mainContent {
-    flex-grow: 1; /* Tells this area to take up all remaining horizontal space */
-    display: flex; /* Use flexbox to easily manage the child (ChatInterface) */
-    flex-direction: column; /* Stack children inside main vertically */
-    overflow-y: auto; /* Allows the content area itself to scroll if needed */
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 2rem;
+    overflow-y: auto;
+    position: relative;
+}
+
+/* --- RESPONSIVE STYLES --- */
+
+/* Hamburger Menu Button */
+.menuButton {
+    display: none; /* Hidden by default on desktop */
+    position: absolute;
+    top: 1rem;
+    left: 1rem;
+    background: #fff;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    padding: 0.5rem;
+    font-size: 1.5rem;
+    z-index: 100;
+    cursor: pointer;
+}
+
+/* Overlay for when mobile menu is open */
+.overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    z-index: 998; /* Below sidebar, above content */
+}
+
+/* Media query for mobile devices (tablets and phones, screen width <= 768px) */
+@media (max-width: 768px) {
+    .mainContent {
+        padding: 1rem;
+        padding-top: 5rem; /* Add space for the menu button */
+    }
+
+    .menuButton {
+        display: block; /* Show the hamburger button on mobile */
+        position: fixed; /* Keep it visible when scrolling */
+    }
+
+    .overlay {
+        display: block; /* The JSX's conditional rendering handles showing/hiding */
+    }
 }

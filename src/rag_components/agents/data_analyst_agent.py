@@ -107,7 +107,7 @@ def analyze_dataframe(query: str, df: pd.DataFrame, master_data: str, row_rules:
     try:
         print("The user role is ", user_role )
         print("The user id is ", user_id )
-        row_rules = row_rules['rowRules']
+        row_rules = row_rules.get('rowRules', {})
         roles = row_rules.keys()
         if user_id != 'duythai':
             for role in roles:
@@ -132,6 +132,7 @@ def analyze_dataframe(query: str, df: pd.DataFrame, master_data: str, row_rules:
 
         # Sau đó mới tiến hành transform DataFrame
         df = DataAnalystAgent.transform_df(df)  # Use cached transformation
+        print("DataFrame after transformation:\n", df.head())
     except Exception as e:
         return {"result": None, "code": "", "error": f"❌ Tiền xử lý DataFrame thất bại: {e}"}
 
