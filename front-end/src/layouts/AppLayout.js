@@ -1,11 +1,13 @@
 import React from 'react';
 import { Outlet } from 'react-router-dom';
 import Sidebar from '../components/common/Sidebar';
+import styles from './AppLayout.module.css'; // We will create this CSS file next
 
 const AppLayout = () => (
-  <div className="flex h-screen bg-slate-100 dark:bg-slate-900">
+  <div className={styles.appLayout}>
     <Sidebar />
-    <main className="flex-1 flex flex-col overflow-hidden">
+    <main className={styles.mainContent}>
+      {/* The Outlet is where your ChatInterface will be rendered */}
       <Outlet />
     </main>
   </div>

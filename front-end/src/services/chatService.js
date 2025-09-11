@@ -39,15 +39,18 @@ const formatChatHistory = (messages) => {
  *  @param {Array<Object>} chatHistory - The entire history of messages from the chat state.
  * @param {string} conversationSummary - The running summary of the conversation. // <-- NEW PARAMETER
  * @param {string} api_key - The API key for the selected chatbot.
+ * @param {string} userId - // <-- NEW DYNAMIC PARAMETER
+ * @param {string} userRole - // <-- NEW DYNAMIC PARAMETE
  * @returns {Promise<any>} A promise that resolves to the server's FULL response object.
  */
-export const sendMessageToServer = async (message, chatHistory, conversationSummary, api_key) => {
+export const sendMessageToServer = async (message, chatHistory, conversationSummary, api_key, userId, userRole) => {
     const formattedHistory = formatChatHistory(chatHistory);
 
     const payload = {
         query: message,
-        user_role: USER_ROLE,
-        user_id: USER_ID,
+        // MODIFIED: Use the parameters instead of constants
+        user_role: userRole,
+        user_id: userId,
         api_key: api_key,
         top_k: 10,
         include_sources: true,

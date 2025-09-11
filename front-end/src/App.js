@@ -1,11 +1,11 @@
-// src/App.js
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import HomePage from './pages/HomePage';
-import ChatPage from './pages/ChatPage';
-import AdminPage from './pages/AdminPage';
-import ChatbotDetailPage from './pages/ChatbotDetailPage'; // Import trang mới
+// Make sure you have this layout component
 import AppLayout from './layouts/AppLayout';
+// Make sure you're importing the right chat component
 import ChatInterface from './components/chat/ChatInterface';
+import AdminPage from './pages/AdminPage';
+import ChatbotDetailPage from './pages/ChatbotDetailPage';
 
 function App() {
     return (
@@ -15,7 +15,6 @@ function App() {
                 <Route element={<AppLayout />}>
                     <Route path="/chat" element={<ChatInterface />} />
                     <Route path="/admin" element={<AdminPage />} />
-                    {/* Route mới cho trang chi tiết chatbot */}
                     <Route path="/admin/:chatbotName" element={<ChatbotDetailPage />} />
                 </Route>
             </Routes>

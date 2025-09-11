@@ -1,4 +1,10 @@
+/* --- MODIFIED: Use Flexbox for a responsive and aligned layout --- */
 .chatHeader {
+    display: flex;
+    justify-content: space-between; /* Pushes items to opposite ends */
+    align-items: center;            /* Vertically aligns everything */
+    flex-wrap: wrap;                /* Allows items to stack on small screens */
+    gap: 1rem;                      /* Space between items */
     padding: 1rem;
     background-color: #f7f7f7;
     border-bottom: 1px solid #e0e0e0;
@@ -6,18 +12,17 @@
     box-sizing: border-box;
 }
 
+/* --- MODIFIED: Removed margin: 0 auto --- */
 .selectorContainer {
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    max-width: 500px;
-    margin: 0 auto;
 }
 
 .selectorContainer label {
     font-weight: bold;
     color: #333;
-    white-space: nowrap; /* Prevents the label from wrapping */
+    white-space: nowrap;
 }
 
 .chatbotSelect {
@@ -27,8 +32,47 @@
     border-radius: 5px;
     background-color: #fff;
     font-size: 1rem;
+    min-width: 200px; /* Ensures it doesn't get too small */
 }
 
+/* --- ALL STYLES BELOW ARE NEW OR MODIFIED --- */
+
+.userSettings {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.inputWrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+    cursor: help; /* Changes cursor to a question mark on hover, indicating help is available */
+}
+
+.icon {
+    position: absolute;
+    left: 10px;
+    color: #888;
+    pointer-events: none; /* Icon doesn't block mouse events */
+}
+
+.userInput {
+    background-color: #ffffff;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    padding: 0.5rem 0.75rem 0.5rem 2.25rem; /* Left padding for icon */
+    font-size: 0.9rem;
+    width: 160px;
+    transition: border-color 0.2s;
+}
+
+.userInput:focus {
+    outline: none;
+    border-color: #007bff;
+}
+
+.userInput:disabled,
 .chatbotSelect:disabled {
     background-color: #e9ecef;
     cursor: not-allowed;

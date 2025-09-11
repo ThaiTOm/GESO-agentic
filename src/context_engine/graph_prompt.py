@@ -12,7 +12,7 @@ SUMMARY_PROMPT = ChatPromptTemplate.from_template(
         {current_summary}
         ---
 
-        Cuộc trao đổi mới nhất (diễn ra vào lúc {timestamp}):
+        Cuộc trao đổi mới nhất:
         - Người dùng: "{user_query}"
         - AI: "{new_response}"
 
@@ -33,12 +33,6 @@ SUMMARY_PROMPT = ChatPromptTemplate.from_template(
         - **Địa điểm:** (Liệt kê các địa danh được đề cập)
         - **Sự kiện & Mốc thời gian:** (Liệt kê các sự kiện hoặc mốc thời gian quan trọng đã được nhắc đến)
         - **Thông tin khác:** (Liệt kê các thuật ngữ, sản phẩm, hoặc thông tin quan trọng khác)
-
-        **4. Dòng thời gian cuộc trò chuyện (Timeline):**
-        (Duy trì một danh sách các điểm chính theo thứ tự thời gian. Thêm thông tin quan trọng nhất từ "Cuộc trao đổi mới nhất" vào cuối danh sách này, gắn kèm với mốc thời gian của nó. Ví dụ:
-        - 2024-09-10 10:00: Người dùng hỏi về thông tin sản phẩm X.
-        - 2024-09-10 10:05: AI cung cấp thông số kỹ thuật và giá của sản phẩm X.
-        - {timestamp}: [Tóm tắt ngắn gọn điểm chính của cuộc trao đổi mới nhất])
         """
     )
 

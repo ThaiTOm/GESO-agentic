@@ -20,7 +20,7 @@ router = APIRouter()
 async def query_analyze_rag_document(request: QueryRequest, api_key: str = Header(...), typesense_client: Any = Depends(get_typesense_client)):
     collection_name = get_chatbot_name_by_api_key(typesense_client, api_key)
 
-    excel_database, master_sheet, selected_db, db_description = await select_excel_database(
+    excel_database, master_sheet, row_rules, selected_db, db_description = await select_excel_database(
         request.query, collection_name)
 
     if excel_database is None:
@@ -28,7 +28,7 @@ async def query_analyze_rag_document(request: QueryRequest, api_key: str = Heade
             "answer": "Không có câu trả lời"
         }
 
-    result_analyze = analyze_dataframe(df=excel_database, query=request.query, master_data=master_sheet)
+    result_analyze = analyze_dataframe(df=excel_database, query=request.query, master_data=master_sheet, row_rules=row_rules, user_id=request.user_id, user_role=request.user_role)
     answer = result_analyze.get("result")
 
     # Pretty the answer

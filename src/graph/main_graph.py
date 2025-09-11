@@ -58,7 +58,10 @@ async def update_history_and_summarize_node(state: OrchestratorState) -> dict:
 
     # Ensure final_response is a string for the history
     if isinstance(final_response, dict):
-        response_text = final_response.get("answer", str(final_response))
+        if "text_summary_for_llm" in final_response:
+            response_text = final_response.get("text_summary_for_llm", str(final_response))
+        else:
+            response_text = final_response.get("answer", str(final_response))
     else:
         response_text = str(final_response)
 
@@ -165,7 +168,9 @@ async def tool_router_node(state: OrchestratorState) -> dict:
             chat_history=[],
             prompt_from_user=state.get("prompt_from_user", ""),
             cloud_call=state.get("cloud_call", True),
-            voice=state.get("voice", False)
+            voice=state.get("voice", False),
+            user_id=state.get('user_id', "duythai"),
+            user_role=state.get('user_role', "duythai"),
         ).dict()
         print("The tool input is ", tool_input)
     elif tool_name == "analysis":

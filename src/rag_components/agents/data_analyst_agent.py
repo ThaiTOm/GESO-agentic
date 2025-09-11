@@ -97,7 +97,7 @@ class DataAnalystAgent:
         return transformed
 
 
-def analyze_dataframe(query: str, df: pd.DataFrame, master_data: str) -> dict:
+def analyze_dataframe(query: str, df: pd.DataFrame, master_data: str, row_rules:dict, user_id:str, user_role:str) -> dict:
     """
     Phân tích dữ liệu dạng bảng (CSV/Excel).
     Chỉ sử dụng tool này nếu người dùng hỏi về bảng, con số, dữ liệu dạng bảng.
@@ -105,6 +105,21 @@ def analyze_dataframe(query: str, df: pd.DataFrame, master_data: str) -> dict:
     """
     # ===== Data Preprocessing =====
     try:
+        print("The user role is ", user_role )
+        print("The user id is ", user_id )
+        row_rules = row_rules['rowRules']
+        roles = row_rules.keys()
+        if user_id != 'duythai':
+            for role in roles:
+                print("The role of current is ", role)
+                if role == user_role:
+                    print('This go inside ')
+                    print("we have ", row_rules[role])
+                    for permission in row_rules[role]:
+                        print(permission, permission["column"])
+                        df = df[df[permission["column"]] == int(user_id)]
+                        print("we run into this read along column")
+
         # init class DataAnalystAgent
         # Chèn Master Data vào vị trí '####'
         modified_instruction = DataAnalystAgent.default_instruction.replace(
@@ -130,7 +145,7 @@ def analyze_dataframe(query: str, df: pd.DataFrame, master_data: str) -> dict:
     # ===== Code Generation =====
     analyst = DataAnalystAgent(model=LLMModels.or_gemini_flash)
     try:
-        prompt = analyst.build_prompt(query=query.lower(), df=df)
+        prompt = analyst.build_prompt(query=query, df=df)
         print(prompt)
         raw_code = analyst.get_agent().run_sync(prompt).output
         print(raw_code)

@@ -1,0 +1,12 @@
+.appLayout {
+    display: flex; /* THIS IS THE KEY: Arranges children (Sidebar, main) side-by-side */
+    height: 100vh; /* Makes the entire layout take up the full screen height */
+    background-color: #f4f7fa; /* Light gray background for the content area */
+}
+
+.mainContent {
+    flex-grow: 1; /* Tells this area to take up all remaining horizontal space */
+    display: flex; /* Use flexbox to easily manage the child (ChatInterface) */
+    flex-direction: column; /* Stack children inside main vertically */
+    overflow-y: auto; /* Allows the content area itself to scroll if needed */
+}

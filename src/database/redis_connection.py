@@ -18,6 +18,47 @@ except redis.exceptions.ConnectionError as e:
 REDIS_KEY_PREFIX = "df_cache:"
 
 
+def delete_dataframe_from_cache(file_path: str):
+    """
+    Deletes a cached DataFrame from Redis based on its file path.
+    """
+    # Create the unique key for this file, THE SAME WAY as in the get function.
+    # This is the most important step.
+    redis_key = f"{REDIS_KEY_PREFIX}{os.path.basename(file_path)}"
+
+    try:
+        # The .delete() command returns the number of keys that were deleted.
+        # It will be 1 if the key existed and was deleted, 0 otherwise.
+        num_deleted = r.delete(redis_key)
+
+        if num_deleted > 0:
+            print(f"SUCCESS: Deleted cached DataFrame for '{file_path}' (key: '{redis_key}')")
+        else:
+            print(f"INFO: No cached DataFrame found for '{file_path}' (key: '{redis_key}'). Nothing to delete.")
+
+    except redis.exceptions.ConnectionError as e:
+        print(f"Redis connection error: {e}. Could not delete key.")
+
+
+def flush_redis_database():
+    """
+    Deletes ALL keys in the current Redis database.
+    WARNING: This is destructive and will remove data from other applications
+    if they share the same Redis database. Use with caution.
+    """
+    print("WARNING: You are about to delete ALL keys in the current Redis database.")
+    # You might want to add a confirmation step in a real application
+    # user_input = input("Are you sure? (yes/no): ")
+    # if user_input.lower() != 'yes':
+    #     print("Operation cancelled.")
+    #     return
+
+    try:
+        r.flushdb()
+        print("SUCCESS: The entire Redis database has been flushed.")
+    except redis.exceptions.ConnectionError as e:
+        print(f"Redis connection error: {e}. Could not flush the database.")
+
 def get_dataframe_with_cache(file_path: str) -> pd.DataFrame:
     """
     Retrieves a DataFrame, using Redis as a cache to avoid re-reading the Excel file.

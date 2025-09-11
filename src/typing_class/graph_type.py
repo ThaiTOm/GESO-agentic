@@ -23,7 +23,6 @@ class OrchestratorState(TypedDict, total=False):
     voice: bool
     conversation_summary: str
 
-
 class OrchestratorRequest(BaseModel):
     query: str = ""
     user_role: str = "duythai"
@@ -37,8 +36,6 @@ class OrchestratorRequest(BaseModel):
     cloud_call: bool = True
     voice: bool = False
     conversation_summary: str
-
-
 
 class OrchestratorResponse(BaseModel):
     response: Any

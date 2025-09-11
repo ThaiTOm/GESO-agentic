@@ -1,5 +1,11 @@
+import json
 from datetime import timezone
-from fastapi import Depends, Query, APIRouter, HTTPException, UploadFile, File, Header
+from typing import Optional, Any
+
+import openpyxl
+import pandas as pd
+from fastapi import Depends, Query, APIRouter, HTTPException, UploadFile, File, Header, Form
+from pydantic import ValidationError
 from utils import helper_rag
 from typing_class.rag_type import *
 from database.typesense_declare import get_typesense_instance_service
@@ -7,6 +13,8 @@ from rag_components.chatbot_manager import *
 from config import settings
 import aiofiles
 import os
+
+from typing_class.rag_type import PermissionConfig
 
 # Initialize logger
 logger = logging.getLogger(__name__)
@@ -103,8 +111,32 @@ async def get_chatbot_documents(
 
 
 @router.post("/typesense/document/upload/{chatbot_name}", response_model=ProcessingResponse)
-async def process_pdf_endpoint(chatbot_name: str, file: UploadFile = File(...), typesense_client: Any = Depends(get_typesense_client)):
+async def process_pdf_endpoint(chatbot_name: str,
+                               file: UploadFile = File(...),
+                               typesense_client: Any = Depends(get_typesense_client),
+                               permissions_str: Optional[str] = Form(None, alias="permissions"),
+                               ):
     """Upload và xử lý file PDF, index vào collection của chatbot."""
+
+    if permissions_str:
+        try:
+            # Manually parse the JSON string
+            permissions_data = json.loads(permissions_str)
+            # Validate the data using the Pydantic model
+            permissions = PermissionConfig(**permissions_data)
+
+            # If we get here, everything is valid
+            permissions_message = "Permission rules were provided and saved."
+            print(f"Received and validated permission configuration for bot: {permissions.botName}")
+            print(permissions)
+            # db.save_permission_config(chatbot_name, permissions.dict())
+
+        except json.JSONDecodeError:
+            raise HTTPException(status_code=400, detail="Invalid JSON format in the 'permissions' field.")
+        except ValidationError as e:
+            # Pydantic raises a ValidationError, which we catch
+            raise HTTPException(status_code=422, detail=f"Invalid permission data: {e.errors()}")
+
     try:
         if file.filename.split(".")[-1] == "pdf":
             result = await helper_rag.process_and_index_pdf(chatbot_name, file, typesense_client)
@@ -127,6 +159,37 @@ async def process_pdf_endpoint(chatbot_name: str, file: UploadFile = File(...), 
                         await out_file.write(content)
             except Exception as e:
                 return {"error": f"Could not save file: {e}"}
+
+            if destination_path.lower().endswith(('.xlsx', '.xls')):
+                try:
+                    if hasattr(permissions, 'model_dump'):
+                        permissions_dict = permissions.model_dump()  # Pydantic v2+
+                    else:
+                        permissions_dict = permissions.dict()  # Pydantic v1
+
+                    # Prepare data for a two-column DataFrame (Key, Value)
+                    # This is much more readable in Excel than trying to map a complex structure.
+                    data_for_df = []
+                    for key, value in permissions_dict.items():
+                        # IMPORTANT: If a value is a list or dict, convert it to a string
+                        # so it can be stored cleanly in a single Excel cell.
+                        if isinstance(value, (list, dict)):
+                            string_value = json.dumps(value)
+                        else:
+                            string_value = str(value)
+                        data_for_df.append([key, string_value])
+
+                    # Create the DataFrame
+                    permission_df = pd.DataFrame(data_for_df, columns=['Permission', 'Value'])
+
+                    # Use pandas ExcelWriter to ADD the new sheet with the data
+                    with pd.ExcelWriter(destination_path, engine='openpyxl', mode='a',
+                                        if_sheet_exists='replace') as writer:
+                        permission_df.to_excel(writer, sheet_name="permission", index=False)
+
+                except Exception as e:
+                    # Handle potential errors during Excel modification
+                    return {"error": f"Could not add 'permission' sheet: {e}"}
 
             return {
                 "status": "success",

@@ -1,30 +1,38 @@
-.messageWrapper {
+.messageWrapperUser {
     display: flex;
-    margin-bottom: 15px;
-    max-width: 90%;
-}
-.messageWrapper.user {
-    margin-left: auto;
-    flex-direction: row-reverse;
-}
-.messageWrapper.bot {
-    margin-right: auto;
-}
-.messageContent {
-    border-radius: 20px;
-}
-/* User messages get a solid background and simple padding */
-.messageWrapper.user .messageContent {
-    background-color: #007bff;
-    color: white;
-    padding: 10px 15px;
-}
-.messageWrapper.user .messageContent p {
-    margin: 0;
+    justify-content: flex-end; /* Align user messages to the right */
+    width: 100%;
 }
 
-.messageWrapper.bot .messageContent {
-    background-color: transparent;
-    padding: 0;
+.messageWrapperBot {
+    display: flex;
+    justify-content: flex-start; /* Align bot messages to the left */
     width: 100%;
+}
+
+.userMessage, .botMessage {
+    max-width: 80%; /* Prevent messages from being too wide */
+    padding: 0.75rem 1rem;
+    border-radius: 18px;
+    line-height: 1.5;
+}
+
+.userMessage {
+    background-color: var(--primary-color, #007bff);
+    color: white;
+    border-bottom-right-radius: 4px;
+}
+
+.botMessage {
+    background-color: #f1f0f0;
+    color: #333;
+    border-bottom-left-radius: 4px;
+    /* Bot message needs no extra padding as ServerResponse handles its own */
+    padding: 0;
+    overflow: hidden; /* Important for border radius on children */
+}
+
+/* For simple text inside the bot message bubble */
+.botMessage .text_content {
+    padding: 0.75rem 1rem;
 }

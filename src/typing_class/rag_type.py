@@ -1,3 +1,6 @@
+import json
+
+from fastapi import Form, HTTPException
 from pydantic import BaseModel
 from typing import List, Dict, Optional, Any, Union
 from datetime import datetime
@@ -46,6 +49,8 @@ class QueryRequest(BaseModel):
     prompt_from_user: Optional[str] = ""
     cloud_call: Optional[bool] = False
     voice: Optional[bool] = False
+    user_id: str = "duythai"
+    user_role: str = 'duythai'
 
 
 class ToolRequest(BaseModel):
@@ -180,3 +185,28 @@ class ToolOutput(BaseModel):
     status: str = "success"
     error: Optional[str] = None
 
+class RowRule(BaseModel):
+    id: int
+    column: str
+    filterType: str
+    value: str
+
+class PermissionConfig(BaseModel):
+    botName: str
+    dataSourceIdentifier: str
+    users: List[str]
+    columnPermissions: Dict[str, Dict[str, str]]
+    rowRules: Dict[str, List[RowRule]]
+
+def parse_permissions(permissions_str: str = Form(..., description="A JSON string containing the authorization rules.")) -> PermissionConfig:
+    """
+    Parses the JSON string from the form data into a PermissionConfig model.
+    Raises HTTPException if parsing or validation fails.
+    """
+    try:
+        permissions_data = json.loads(permissions_str)
+        return PermissionConfig(**permissions_data)
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="Invalid JSON format in the 'permissions' field.")
+    except Exception as e: # Catches Pydantic validation errors
+        raise HTTPException(status_code=422, detail=f"Invalid permission data: {e}")
