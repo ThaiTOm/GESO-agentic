@@ -24,11 +24,10 @@
 }
 
 .botMessage {
-    background-color: #f1f0f0;
+    background-color: #efefef;
     color: #333;
     border-bottom-left-radius: 4px;
     /* Bot message needs no extra padding as ServerResponse handles its own */
-    padding: 0;
     overflow: hidden; /* Important for border radius on children */
 }
 

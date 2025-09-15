@@ -82,7 +82,13 @@ class LLMModels:
     - Local models: requires a base_url and api_key
     """
     # Local models
-
+    local_model = OpenAIChatModel(
+        model_name="deepseek-ai/DeepSeek-Prover-V2-7B",
+        provider=OpenAIProvider(
+            base_url="http://localhost:2626/v1",
+            api_key="i-no-need-no-key-bruh"
+        )
+    )
 
     # Gemini models
     gemini_key = " "
@@ -94,7 +100,6 @@ class LLMModels:
                                       )
 
     # OpenRouter models
-
     open_router_provider = OpenAIProvider(
         base_url='https://openrouter.ai/api/v1',
         api_key=settings.OPEN_ROUTER_KEY
@@ -115,6 +120,11 @@ class LLMModels:
                                       provider=OpenAIProvider(base_url='https://openrouter.ai/api/v1',
                                                               api_key=settings.OPEN_ROUTER_KEY)
                                       )
+
+    or_gemma3 = OpenAIChatModel(
+        "google/gemma-3-12b-it:free",
+        provider=open_router_provider
+    )
 
     # Groq models
     groq_key = " "

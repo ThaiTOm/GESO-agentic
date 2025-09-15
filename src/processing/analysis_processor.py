@@ -79,18 +79,23 @@ def _read_excel_file_data(file_path: str) -> Tuple[
     # ===================== NEW SECTION END =====================
 
     # Try to read the data sheet (Existing code)
+    data_df = None  # Khởi tạo df để chắc chắn nó tồn tại
     try:
-        data_df = pd.read_excel(file_path, sheet_name="data")
+        # Thêm dtype=str để đọc tất cả các cột dưới dạng chuỗi
+        data_df = pd.read_excel(file_path, sheet_name="data", dtype=str, engine='openpyxl')
     except ValueError:
         logger.info(f"Data sheet not found in {file_path}, attempting to read default sheet.")
         try:
-            data_df = pd.read_excel(file_path)
+            # Thêm dtype=str ở đây nữa
+            data_df = pd.read_excel(file_path, dtype=str, engine='openpyxl')
         except Exception as e:
             error_message = f"Error reading default sheet from {file_path}: {e}"
             logger.error(error_message)
+            # return hoặc raise lỗi ở đây nếu cần
     except Exception as e:
         error_message = f"Error reading 'data' sheet from {file_path}: {e}"
         logger.error(error_message)
+
     print("Permission data ", permission_data)
     # Note the new position of permission_data in the return tuple
     return data_df, master_df, permission_data, description, error_message

@@ -44,6 +44,10 @@ async def query_analyze_rag_document(request: QueryRequest, api_key: str = Heade
 
     Hãy định dạng lại câu trả lời sau đây và chỉ xuất ra kết quả cuối cùng.
     **Câu trả lời:** "{answer}"
+    
+    [QUY TẮC XỬ LÝ KHI KHÔNG CÓ CÂU TRẢ LỜI]
+    Không được trả lời "Tôi không biết" hoặc cố gắng đoán.
+    Hãy trả lời: Rất tiếc, tôi chưa có thông tin về vấn đề này. Vui lòng liên hệ bộ phận hỗ trợ phù hợp để được giải đáp.
     """)
 
     summarizer_chain = (

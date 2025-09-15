@@ -1,6 +1,6 @@
 import React from 'react';
 import styles from './ChatMessage.module.css';
-import ServerResponse from '../api/ServerResponse'; // Make sure this path is correct
+import ServerResponse from '../api/ServerResponse';
 
 const ChatMessage = ({ message }) => {
     const isUser = message.sender === 'user';
@@ -8,18 +8,25 @@ const ChatMessage = ({ message }) => {
     const messageClass = isUser ? styles.userMessage : styles.botMessage;
 
     const renderContent = () => {
-        // For user messages or simple string bot messages (like errors or "Hello")
-        if (isUser || typeof message.content === 'string') {
-            return <div className={styles.text_content}>{message.content}</div>;
+        // For user messages (which are already styled correctly by .userMessage)
+        if (isUser) {
+            return message.content;
         }
 
-        // For complex bot responses (which are objects), use ServerResponse
+        // For simple string bot messages (like errors or "Hello")
+        if (typeof message.content === 'string') {
+            // THE FIX: Wrap simple text in a div with the new .textContent class
+            return <div className={styles.textContent}>{message.content}</div>;
+        }
+
+        // For complex bot responses (which are objects)
         if (typeof message.content === 'object' && message.content !== null) {
+            // ServerResponse will now correctly fill the padding-less .botMessage bubble
             return <ServerResponse response={message.content} />;
         }
 
         // Fallback for any unexpected content type
-        return <div className={styles.text_content}>Unsupported message format.</div>;
+        return <div className={styles.textContent}>Unsupported message format.</div>;
     };
 
     return (
