@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 // The endpoint for the orchestrator
-const ORCHESTRATE_API_URL = 'http://ai.tvssolutions.vn:8001/orchestrate';
+const ORCHESTRATE_API_URL = 'http://8.34.124.122:20735/orchestrate';
 
 // --- Configuration ---
 const USER_ID = "duythai";

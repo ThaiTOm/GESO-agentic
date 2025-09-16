@@ -79,18 +79,23 @@ def _read_excel_file_data(file_path: str) -> Tuple[
     # ===================== NEW SECTION END =====================
 
     # Try to read the data sheet (Existing code)
+    data_df = None  # Khởi tạo df để chắc chắn nó tồn tại
     try:
-        data_df = pd.read_excel(file_path, sheet_name="data")
+        # Thêm dtype=str để đọc tất cả các cột dưới dạng chuỗi
+        data_df = pd.read_excel(file_path, sheet_name="data", dtype=str, engine='openpyxl')
     except ValueError:
         logger.info(f"Data sheet not found in {file_path}, attempting to read default sheet.")
         try:
-            data_df = pd.read_excel(file_path)
+            # Thêm dtype=str ở đây nữa
+            data_df = pd.read_excel(file_path, dtype=str, engine='openpyxl')
         except Exception as e:
             error_message = f"Error reading default sheet from {file_path}: {e}"
             logger.error(error_message)
+            # return hoặc raise lỗi ở đây nếu cần
     except Exception as e:
         error_message = f"Error reading 'data' sheet from {file_path}: {e}"
         logger.error(error_message)
+
     print("Permission data ", permission_data)
     # Note the new position of permission_data in the return tuple
     return data_df, master_df, permission_data, description, error_message
@@ -210,13 +215,13 @@ async def select_excel_database(query: str, found_collection: str, cloud: bool =
 
     if not os.path.exists(collection_folder):
         logger.error(f"Collection folder {collection_folder} does not exist")
-        return None, None, "No database available", ""
+        return None, None, "No database available", "", ""
 
     db_files = [os.path.join(collection_folder, f) for f in os.listdir(collection_folder)]
 
     if not db_files:
         logger.error(f"No database files found in {collection_folder}")
-        return None, None, "No database available", ""
+        return None, None, "No database available", "", ""
 
     # If only one database file exists, use it directly
     if len(db_files) == 1:
@@ -225,8 +230,8 @@ async def select_excel_database(query: str, found_collection: str, cloud: bool =
         df, master_df, permission, description, error = get_excel_data_with_cache(file_path)
 
         if error:
-            return None, None, "Error reading database", ""
-        return df, master_df, os.path.basename(file_path), description
+            return None, None, "Error reading database", "", ""
+        return df, master_df, permission, os.path.basename(file_path), description,
 
     # Extract metadata (this part is fast, no need to cache `nrows=5` reads)
     db_metadata = [
@@ -239,8 +244,8 @@ async def select_excel_database(query: str, found_collection: str, cloud: bool =
         file_path = db_files[0]
         df, master_df, permission, description, error = get_excel_data_with_cache(file_path)
         if error:
-            return None, None, "Error reading database", ""
-        return df, master_df, os.path.basename(file_path), description
+            return None, None, "Error reading database", "", ""
+        return df, master_df, permission, os.path.basename(file_path), description
 
     db_metadata_json = json.dumps(
         db_metadata, indent=2, cls=CustomEncoder, ensure_ascii=False
@@ -267,7 +272,7 @@ async def select_excel_database(query: str, found_collection: str, cloud: bool =
 
     if selected_db_name == "NONE":
         logger.info("LLM determined no database can answer the query")
-        return None, None, "No suitable database found for this query", ""
+        return None, None, "No suitable database found for this query", "", ""
 
     # Find the full path of the selected database
     selected_path = next((path for path in db_files if os.path.basename(path) == selected_db_name), None)
@@ -281,7 +286,7 @@ async def select_excel_database(query: str, found_collection: str, cloud: bool =
 
     if error:
         logger.error(f"Failed to read selected/fallback file {selected_path}: {error}")
-        return None, None, "Error reading database", ""
+        return None, None, "Error reading database", "", ""
 
     # Get description from metadata if available, otherwise use from file read
     final_description = next(

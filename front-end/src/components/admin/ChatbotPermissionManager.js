@@ -7,7 +7,7 @@ import axios from "axios";
 
 // --- CÁC ĐỊNH NGHĨA CỐ ĐỊNH ---
 let URL_FOR_UPLOAD;
-URL_FOR_UPLOAD = "http://ai.tvssolutions.vn:2111/api/v1/typesense/document/upload/"
+URL_FOR_UPLOAD = "http://8.34.124.122:20736/api/v1/typesense/document/upload/"
 // Định nghĩa các cấp độ quyền CỘT
 const PERMISSION_LEVELS = {
     ALLOW: 'Được đọc',

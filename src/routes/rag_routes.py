@@ -213,6 +213,7 @@ async def process_pdf_endpoint(chatbot_name: str,
 async def query_documents_endpoint(request: QueryRequest, api_key: str = Header(...), typesense_client: Any = Depends(get_typesense_client)):
     """Endpoint thực hiện RAG query, trả về câu trả lời từ LLM."""
     response_data = await helper_rag.process_rag_query(request, api_key, typesense_client)
+    print(response_data["answer"])
     return response_data
 
 

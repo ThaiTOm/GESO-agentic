@@ -47,6 +47,8 @@ async def update_history_and_summarize_node(state: OrchestratorState) -> dict:
     Node 5: Updates the chat history and generates a new conversation summary.
     This runs just before the graph ends, preparing the state for the next turn.
     """
+
+
     print("--- NODE: Update History & Summarize ---")
 
     # 1. Get current state values, providing defaults
@@ -56,6 +58,11 @@ async def update_history_and_summarize_node(state: OrchestratorState) -> dict:
     chat_history = state.get("chat_history", [])
     current_summary = state.get("conversation_summary", "Đây là lượt đầu tiên của cuộc trò chuyện.")
 
+    return {
+        "chat_history": chat_history,
+        "conversation_summary": current_summary
+    }
+    
     # Ensure final_response is a string for the history
     if isinstance(final_response, dict):
         if "text_summary_for_llm" in final_response:
@@ -157,7 +164,7 @@ async def tool_router_node(state: OrchestratorState) -> dict:
     print(f"--- ROUTER DECISION: Tool='{tool_name}' ---")
 
     tool_input = {}
-    query = f"***summarize conversation***: {conversation_summary}, **user_query**: {query}"
+    query = (f"**Câu hỏi từ người dùng**: {query}")
     ### MODIFIED: Added logic to handle the new tool and prepare its input ###
     if tool_name in ["rag", "retrieval_from_database"]:
         # Both RAG and DB retrieval can use a similar input structure
@@ -165,7 +172,7 @@ async def tool_router_node(state: OrchestratorState) -> dict:
             query=query,
             top_k=state.get("top_k", 10),
             include_sources=state.get("include_sources", True),
-            chat_history=[],
+            chat_history=state.get("chat_history", []),
             prompt_from_user=state.get("prompt_from_user", ""),
             cloud_call=state.get("cloud_call", True),
             voice=state.get("voice", False),
@@ -293,6 +300,8 @@ def should_summarize_analysis(state: OrchestratorState) -> Literal["summarize", 
     analysis tool was the one that just ran.
     """
     print("--- EDGE: Checking if summarization is needed ---")
+    # TODO
+
     if state.get("tool_to_use") == "analysis":
         print("--- DECISION: Route to summarizer ---")
         return "summarize"

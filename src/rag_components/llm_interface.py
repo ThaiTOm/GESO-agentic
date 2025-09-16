@@ -64,19 +64,24 @@ reformulation_prompt = ChatPromptTemplate.from_template(REFORMULATION_PROMPT) # 
 llm_for_reformulation = cloud_llm
 reformulation_chain = (
     reformulation_prompt
-    | llm_for_reformulation.bind(max_output_tokens=256)
+    | llm_for_reformulation.bind()
     | StrOutputParser()
 )
 
 # 3. Create the new async function that wraps the logic
 async def reformulate_query_with_chain(query: str, chat_history: List[Dict]) -> str:
     """Reformulates a query to be standalone if chat history exists."""
+    print("This things run")
+    print(chat_history)
     if not chat_history:
         return query
 
     # Prepare inputs for the chain
-    recent_history = chat_history[-2:]
-    context_str = "\n".join([f"Q: {item['question']}\nA: {item['answer']}" for item in recent_history])
+    recent_history = chat_history[-5:]
+
+    context_str = "\n".join(f"{msg['role'].capitalize()}: {msg['content']}" for msg in recent_history)
+
+    print(context_str)
 
     # Invoke the chain
     reformulated = await reformulation_chain.ainvoke({

@@ -2,6 +2,7 @@ from fastapi import Depends, Header, APIRouter
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 
+from rag_components.llm_interface import reformulate_query_with_chain
 from routes.rag_routes import get_typesense_client
 from typing_class.rag_type import *
 from rag_components.chatbot_manager import *
@@ -20,15 +21,21 @@ router = APIRouter()
 async def query_analyze_rag_document(request: QueryRequest, api_key: str = Header(...), typesense_client: Any = Depends(get_typesense_client)):
     collection_name = get_chatbot_name_by_api_key(typesense_client, api_key)
 
+    reformulated_query = await reformulate_query_with_chain(
+        query=request.query,
+        chat_history=request.chat_history
+    )
+
     excel_database, master_sheet, row_rules, selected_db, db_description = await select_excel_database(
-        request.query, collection_name)
+        reformulated_query, collection_name)
 
     if excel_database is None:
         return {
             "answer": "Không có câu trả lời"
         }
 
-    result_analyze = analyze_dataframe(df=excel_database, query=request.query, master_data=master_sheet, row_rules=row_rules, user_id=request.user_id, user_role=request.user_role)
+
+    result_analyze = analyze_dataframe(df=excel_database, query=reformulated_query, master_data=master_sheet, row_rules=row_rules, user_id=request.user_id, user_role=request.user_role)
     answer = result_analyze.get("result")
 
     # Pretty the answer
@@ -44,6 +51,10 @@ async def query_analyze_rag_document(request: QueryRequest, api_key: str = Heade
 
     Hãy định dạng lại câu trả lời sau đây và chỉ xuất ra kết quả cuối cùng.
     **Câu trả lời:** "{answer}"
+    
+    [QUY TẮC XỬ LÝ KHI KHÔNG CÓ CÂU TRẢ LỜI]
+    Không được trả lời "Tôi không biết" hoặc cố gắng đoán.
+    Hãy trả lời: Rất tiếc, tôi chưa có thông tin về vấn đề này. Vui lòng liên hệ bộ phận hỗ trợ phù hợp để được giải đáp.
     """)
 
     summarizer_chain = (
@@ -71,6 +82,6 @@ async def query_analyze_rag_document(request: QueryRequest, api_key: str = Heade
             "file_name": selected_db,
             "database_description": db_description[:100] + "..." if len(db_description) > 100 else db_description,
             "original_query": request.query,
-            "rewritten_query": request.query
+            "rewritten_query": reformulated_query
         }
     }
