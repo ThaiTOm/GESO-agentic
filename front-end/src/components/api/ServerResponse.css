@@ -1,93 +1,6 @@
 /* General container for all response types */
 .response-container {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-    line-height: 1.6;
-    margin: 20px 0;
-}
-
-/* Styles for the improved RAG response card */
-.rag-response .rag-card {
-    background-color: #f9f9f9;
-    border-radius: 12px;
-    border: 1px solid #e0e0e0;
-    padding: 24px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
-    overflow: hidden;
-}
-
-.rag-response .markdown-answer {
-    color: #333;
-    margin-bottom: 24px;
-}
-
-/* Ensure markdown elements like lists and paragraphs have proper spacing */
-.rag-response .markdown-answer p {
-    margin-bottom: 1em;
-}
-
-.rag-response .markdown-answer ul {
-    padding-left: 20px;
-    margin-top: 0.5em;
-    margin-bottom: 1em;
-}
-
-.rag-response .markdown-answer li {
-    margin-bottom: 0.5em;
-}
-
-/* Styling for the "Sources" section */
-.rag-response .sources-section {
-    border-top: 1px solid #e0e0e0;
-    padding-top: 16px;
-}
-
-.rag-response .sources-title {
-    font-size: 1rem;
-    font-weight: 600;
-    color: #555;
-    margin-top: 0;
-    margin-bottom: 12px;
-}
-
-.rag-response .sources-list {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-}
-
-/* Styling for each individual source tag */
-.rag-response .source-tag {
-    display: inline-flex;
-    align-items: center;
-    background-color: #e7f3ff;
-    color: #005a9e;
-    border-radius: 16px;
-    padding: 6px 12px;
-    font-size: 0.875rem;
-    font-weight: 500;
-    cursor: pointer;
-    transition: background-color 0.2s ease, box-shadow 0.2s ease;
-    border: 1px solid #b3d4ff;
-}
-
-.rag-response .source-tag:hover {
-    background-color: #d0e8ff;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
-}
-
-.rag-response .source-score {
-    margin-left: 8px;
-    font-size: 0.8rem;
-    font-weight: 400;
-    color: #004b82;
-    background-color: #cce4ff;
-    padding: 2px 6px;
-    border-radius: 10px;
-}
-
-/* General container for all response types */
-.response-container {
-    padding: 0.75rem 1.25rem;
+    padding: 1rem 1.25rem;
     width: 100%;
 }
 
@@ -101,12 +14,8 @@
     padding-left: 1.5rem;
     margin: 0.5rem 0;
 }
-.markdown-answer strong,
-.markdown-summary strong {
-    color: #111;
-}
 
-/* Styles for RAG (Retrieval-Augmented Generation) responses */
+/* --- STYLES FOR RAG (Retrieval-Augmented Generation) RESPONSES --- */
 .rag-card {
     display: flex;
     flex-direction: column;
@@ -114,38 +23,72 @@
 }
 
 .sources-section {
-    border-top: 1px solid #e0e0e0;
-    padding-top: 0.75rem;
+    /* The subtle dividing line from the screenshot */
+    border-top: 1px solid #e5e7eb;
+    padding-top: 1rem;
 }
 
 .sources-title {
     font-size: 0.9rem;
     font-weight: 600;
-    color: #555;
-    margin: 0 0 0.5rem 0;
+    color: #4b5563; /* A softer, professional gray */
+    margin: 0 0 0.75rem 0;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
 }
 
 .sources-list {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.5rem;
+    gap: 0.75rem; /* Space between the tags */
 }
 
+/* --- THIS IS THE MAIN STYLE UPDATE FOR THE SOURCE TAGS --- */
 .source-tag {
     display: inline-flex;
     align-items: center;
     gap: 0.5rem;
-    background-color: #e9ecef;
-    border: 1px solid #dee2e6;
-    border-radius: 12px;
-    padding: 0.25rem 0.75rem;
-    font-size: 0.8rem;
-    color: #495057;
+
+    /* The light blue background */
+    background-color: #e0f2fe; /* light sky-100 color */
+
+    /* A slightly darker blue for the text */
+    color: #0369a1; /* sky-700 color */
+
+    font-size: 0.85rem;
+    font-weight: 500;
+
+    /* Make it a perfect pill shape */
+    border-radius: 9999px;
+
+    /* Padding to create space inside the pill */
+    padding: 0.25rem 0.375rem 0.25rem 0.875rem; /* T-R-B-L */
+
+    /* A subtle border */
+    border: 1px solid #bae6fd; /* sky-200 color */
+
+    transition: all 0.2s ease-in-out;
+    cursor: pointer;
 }
 
+.source-tag:hover {
+    box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+    transform: translateY(-1px);
+    border-color: #7dd3fc; /* sky-300 color */
+}
+
+/* --- NEW STYLES FOR THE SCORE BOX INSIDE THE TAG --- */
 .source-score {
-    font-weight: 500;
-    color: #007bff;
+    /* A semi-transparent, slightly darker blue background */
+    background-color: rgba(56, 189, 248, 0.2); /* sky-400 with alpha */
+
+    /* A darker blue for the score text */
+    color: #0284c7; /* sky-600 color */
+
+    padding: 0.125rem 0.625rem;
+    border-radius: 9999px;
+    font-weight: 600;
+    font-size: 0.75rem;
 }
 
 /* Styles for Plotly charts */
