@@ -1,58 +1,89 @@
+from langchain_core.messages import HumanMessage
 import hashlib
 import pandas as pd
+from langchain_core.output_parsers import PydanticOutputParser
 from pydantic_ai import Agent
 
 from llm.provider import LLMModels
-from context_engine.rag_prompt import DATA_ANALYST_PANDAS_PROMPT
 from utils.helper_rag import format_numbers_in_string
 import numpy as np
 import re
 
+
+from pydantic import BaseModel, Field
+
+class CodeOutput(BaseModel):
+    """A Pydantic model to structure the output for the data analyst agent."""
+    reasoning: str = Field(description="A brief, one-sentence explanation of the plan in Vietnamese.")
+    code: str = Field(description="The Python code to execute to answer the user's query.")
+
+
 class DataAnalystAgent:
     _transform_cache = {}
 
-    default_instruction = (
-        "Hôm nay là ngày {time.strftime('%d/%m/%Y')}.\n\n"
-        "Data đã được load vào variable `df`. "
-        "Dưới đây là các thông tin mô tả DataFrame: \n"
-        "####"
+    # --- 1. Define our high-quality examples ---
+    _examples = [
+        {
+            "query": "tổng doanh thu là bao nhiêu?",
+            "output": CodeOutput(
+                reasoning="Để tính tổng doanh thu, tôi sẽ tính tổng của cột 'DoanhThu'.",
+                code="result = df['DoanhThu'].sum()"
+            )
+        },
+        {
+            "query": "có bao nhiêu đơn hàng cho mỗi thành phố?",
+            "output": CodeOutput(
+                reasoning="Để đếm đơn hàng cho mỗi thành phố, tôi sẽ nhóm theo cột 'ThanhPho' và đếm số lượng.",
+                code="result = df.groupby('ThanhPho').size()"
+            )
+        }
+    ]
 
+    # --- 2. Update the prompt template to include a placeholder for examples ---
+    default_instruction = (
+        "You are an expert Python data analyst. Your task is to write Python code to answer a user's question based on a given pandas DataFrame.\n"
+        "The DataFrame is available in a variable named `df`.\n"
+        "Your response MUST be a JSON object that conforms to the provided schema.\n\n"
+        "--- EXAMPLES ---\n"
+        "{examples}\n\n"  # Placeholder for our formatted examples
+        "--- CURRENT TASK ---\n"
+        "Hôm nay là ngày {time.strftime('%d/%m/%Y')}.\n"
+        "Dưới đây là các thông tin mô tả DataFrame hiện tại: \n"
+        "####\n"
         "- Kiểu dữ liệu các cột (df.dtypes): \n"
         "{df.dtypes} \n\n"
-
-        "- ví dụ các giá trị của cột: \n"
+        "- Ví dụ các giá trị của cột: \n"
         "{column_examples}\n\n"
-
         "- 5 dòng đầu tiên (df.head()): \n"
         "{df.head(5).to_csv()}\n\n"
-
         "Câu hỏi của bạn là: {query}"
-        "Hãy viết code python để tôi có thể chạy ngay lập tức"
     )
 
-    def __init__(self, model=LLMModels.or_gemma3):
+    def __init__(self, model):
         self.model = model
-        self._agent = None
-        self._setup_agent()
 
-    def _setup_agent(self):
-        self._agent = Agent(
-            system_prompt=DATA_ANALYST_PANDAS_PROMPT,
-            model=self.model,
-            retries=3
-        )
-
-    def get_agent(self):
-        return self._agent
+    # --- 3. Add a helper method to format the examples into a string ---
+    def _format_examples(self) -> str:
+        example_strings = []
+        for example in self._examples:
+            query = example['query']
+            # Use .model_dump_json() for Pydantic v2
+            output_json = example['output'].model_dump_json(indent=2)
+            example_str = f"Question: {query}\nOutput:\n```json\n{output_json}\n```"
+            example_strings.append(example_str)
+        return "\n\n".join(example_strings)
 
     def build_prompt(self, query: str, df: pd.DataFrame):
-        # Generate the column examples dictionary as a string
         column_examples = {}
         for col in df.columns:
             column_examples[col] = df[col].dropna().unique()[:10].tolist()
 
-        # Format the prompt with all the necessary replacements
+        # --- 4. Format the examples and insert them into the prompt ---
+        formatted_examples = self._format_examples()
+
         prompt = self.default_instruction.replace(
+            "{examples}", formatted_examples
+        ).replace(
             "{df.dtypes}", df.dtypes.to_markdown()
         ).replace(
             "{df.head(5).to_csv()}", str(df.head(5).to_csv())
@@ -61,6 +92,8 @@ class DataAnalystAgent:
         ).replace(
             "{column_examples}", str(column_examples)
         )
+        print("=============== The prompt after build ")
+        print(prompt)
         return prompt
 
     @staticmethod
@@ -170,18 +203,35 @@ def analyze_dataframe(query: str, df: pd.DataFrame, master_data: str, row_rules:
     }
 
     # ===== Code Generation =====
-    analyst = DataAnalystAgent(model=LLMModels.or_gemini_flash)
+    analyst = DataAnalystAgent(model=LLMModels.local_model)
     try:
-        prompt = analyst.build_prompt(query=query, df=df)
-        raw_code = analyst.get_agent().run_sync(prompt).output
-        print("The raw string code is: ")
-        print(raw_code)
-        match = re.search(r"```python\s*(.*?)\s*```", raw_code, re.DOTALL)
-        if match:
-            code = match.group(1).strip()
-            print("Extracted code:\n", code)
-        else:
-            print("No code block found")
+        # 1. Set up the parser using your Pydantic class
+        parser = PydanticOutputParser(pydantic_object=CodeOutput)
+
+        # 2. Build the initial prompt
+        base_prompt = analyst.build_prompt(query=query, df=df)
+
+        # 3. Get the formatting instructions from the parser and add them to the prompt
+        #    This is how we tell the model to generate JSON.
+        format_instructions = parser.get_format_instructions()
+        prompt_with_instructions = f"{base_prompt}\n\n{format_instructions}"
+
+        # 4. Invoke the model with the combined prompt
+        messages = [HumanMessage(content=prompt_with_instructions)]
+        response_object = analyst.model.invoke(messages, max_tokens=258)
+
+        print("Raw response from model:\n", response_object.content)
+
+        # 5. Use the parser to convert the model's string response into a Pydantic object
+        #    This step handles JSON validation and parsing automatically.
+        parsed_output = parser.parse(response_object.content)
+
+        # 6. Access the attributes directly from the parsed object
+        code = parsed_output.code
+        reasoning = parsed_output.reasoning
+
+        print(f"AI Reasoning: {reasoning}")
+        print("Extracted code:\n", code)
 
     except Exception as e:
         print(e)
@@ -203,11 +253,11 @@ def analyze_dataframe(query: str, df: pd.DataFrame, master_data: str, row_rules:
     print(execution_env)
     result = execution_env.get("result")
     print("=============== The result code run by AI ")
-    print(result)
     result = format_numbers_in_string(str(result))
+    print(result)
 
 
-    if not result:
+    if not result or len(result) > 3000:
         return {"result": None, "code": code,
                 "error": "⚠️ Không tìm thấy biến 'result'. Kiểm tra logic mã sinh."}
 

@@ -26,7 +26,6 @@ class GeminiService:
     Represents a single worker for the Gemini API using one API key.
     Now includes both synchronous and asynchronous calling methods.
     """
-
     def __init__(self, api_key: str, model_name: str, max_concurrent_requests: int):
         self.api_key = api_key
         self.model_name = model_name
@@ -184,55 +183,3 @@ async def local_call_async(prompt: str, max_tokens: int, temperature: float) -> 
     except (json.JSONDecodeError, IndexError) as e:
         logging.error(f"Error parsing response from local model API: {e}")
         return ""
-
-async def get_structured_llm_output(
-    prompt: str,
-    pydantic_model: Type[T],
-    cloud: bool = False,
-    max_tokens: int = 1024
-) -> T | None:
-    """
-    Calls an LLM, asks for JSON output, and parses it into a Pydantic model.
-    This function replaces the need for proprietary features like `with_structured_output`.
-    """
-    # Append instructions to the prompt to ensure JSON output
-    json_prompt = f"""
-    {prompt}
-
-    Provide your response exclusively in a valid JSON format that adheres to the following Pydantic schema. Do not include any explanatory text, comments, or markdown formatting like ```json.
-
-    JSON Schema:
-    {pydantic_model.schema_json(indent=2)}
-    """
-
-    # Call the selected LLM (either cloud or local)
-    if cloud:
-        response_text = await cloud_call_async(json_prompt, max_output_tokens=max_tokens, temperature=0.0)
-    else:
-        response_text = await local_call_async(json_prompt, max_tokens=max_tokens, temperature=0.0)
-
-    if not response_text:
-        logging.error("LLM returned an empty response.")
-        return None
-
-    # Attempt to parse the LLM's string response into the Pydantic model
-    try:
-        # Clean the response in case the model wraps it in markdown code fences
-        cleaned_text = response_text.strip().removeprefix("```json").removesuffix("```").strip()
-        # Load the cleaned text into a Python dictionary
-        data = json.loads(cleaned_text)
-        # Validate and create the Pydantic model instance
-        return pydantic_model(**data)
-    except (json.JSONDecodeError, ValidationError) as e:
-        # Log detailed errors for easier debugging
-        logging.error(f"Failed to parse LLM output into {pydantic_model.__name__}. Error: {e}")
-        logging.error(f"Raw LLM Output that caused the error:\n---\n{response_text}\n---")
-        return None
-
-
-async def get_raw_llm_output(prompt: str, cloud: bool = False, max_tokens: int = 1024) -> str:
-    if cloud:
-        response_text = await cloud_call_async(prompt, max_output_tokens=max_tokens, temperature=0.0).text
-    else:
-        response_text = await local_call_async(prompt, max_tokens=max_tokens, temperature=0.0)
-    return response_text.strip()

@@ -36,11 +36,11 @@ async def query_analyze_rag_document(request: QueryRequest, api_key: str = Heade
 
 
     result_analyze = analyze_dataframe(df=excel_database, query=reformulated_query, master_data=master_sheet, row_rules=row_rules, user_id=request.user_id, user_role=request.user_role)
-    answer = result_analyze.get("result")
+    answer = result_analyze.get("result", None)
 
     # Pretty the answer
     prompt = ChatPromptTemplate.from_template("""
-    Bạn là một trợ lý chuyên về định dạng văn bản. Nhiệm vụ của bạn là trình bày lại câu trả lời dưới đây một cách chuyên nghiệp và dễ đọc.
+    Bạn là một trợ lý chuyên về định dạng văn bản. Nhiệm vụ của bạn là trình bày lại câu trả lời dưới đây một cách chuyên nghiệp và dễ đọc, hãy lịch sự.
 
     **Yêu cầu định dạng:**
     - **In đậm:** Sử dụng in đậm cho các tiêu đề chính hoặc các thuật ngữ quan trọng.
@@ -49,12 +49,9 @@ async def query_analyze_rag_document(request: QueryRequest, api_key: str = Heade
     - **Cấu trúc:** Phân chia nội dung thành các đoạn văn ngắn, có tiêu đề rõ ràng nếu cần.
     - **Lưu ý:** Tuyệt đối không sử dụng định dạng bảng.
 
-    Hãy định dạng lại câu trả lời sau đây và chỉ xuất ra kết quả cuối cùng.
-    **Câu trả lời:** "{answer}"
-    
-    [QUY TẮC XỬ LÝ KHI KHÔNG CÓ CÂU TRẢ LỜI]
-    Không được trả lời "Tôi không biết" hoặc cố gắng đoán.
-    Hãy trả lời: Rất tiếc, tôi chưa có thông tin về vấn đề này. Vui lòng liên hệ bộ phận hỗ trợ phù hợp để được giải đáp.
+    **Đây là câu trả lời hãy chỉ cho ra kết quả cuối cùng, không kèm thêm gì**
+     - **Câu trả lời:** "{answer}"
+     - **Câu hỏi của người dùng:** "{query}"
     """)
 
     summarizer_chain = (
@@ -65,12 +62,12 @@ async def query_analyze_rag_document(request: QueryRequest, api_key: str = Heade
 
     # 3. Invoke the chain with the necessary inputs
     answer_fn = await summarizer_chain.ainvoke({
-        "answer": answer
+        "answer": answer,
+        "query": reformulated_query
     })
 
-    if answer_fn is None:
-        error_message = result_analyze.get("error", "Không thể phân tích dữ liệu")
-        answer_fn = f"Không tìm thấy câu trả lời phù hợp cho câu hỏi của bạn."
+    if answer is None:
+        answer_fn = f"Rất tiếc, tôi chưa có thông tin về vấn đề này. Vui lòng liên hệ bộ phận hỗ trợ phù hợp để được giải đáp."
 
     return {
         "query": request.query,

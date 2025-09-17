@@ -82,12 +82,11 @@ class LLMModels:
     - Local models: requires a base_url and api_key
     """
     # Local models
-    local_model = OpenAIChatModel(
-        model_name="Qwen/Qwen2-7B-Instruct",
-        provider=OpenAIProvider(
-            base_url="http://localhost:8000/v1",
-            api_key="i-no-need-no-key-bruh"
-        )
+    local_model = ChatOpenAI(
+        model="tgi-local-model",  # This name is for client-side reference
+        openai_api_base="http://localhost:8080/v1",  # The URL of your TGI server
+        openai_api_key="not-needed",  # TGI doesn't need a key
+        temperature=0.1
     )
 
     # Gemini models

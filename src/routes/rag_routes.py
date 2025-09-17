@@ -49,6 +49,7 @@ async def create_chatbot_endpoint(request: ChatbotCreateRequest, typesense_clien
     """Tạo chatbot mới"""
     try:
         meta = typesense_client.create_chatbot(request.name, request.description or "")
+        os.makedirs(os.path.join(settings.UPLOAD_DIR, meta.get("name")), exist_ok=True)
         chatbot_obj = Chatbot(
             chatbot_id=meta.get("id"), name=meta.get("name"), description=meta.get("description", ""),
             chatbot_api_key=meta.get("api_key"), created_at=datetime.now(timezone.utc), updated_at=datetime.now(timezone.utc)

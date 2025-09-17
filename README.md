@@ -147,6 +147,17 @@ The system is built with a modular architecture consisting of several key compon
    uvicorn src.main:app --host 0.0.0.0 --port 8001 --reload
    ```
 
+### Service
+
+1. LLM service
+```
+export MODEL_DIR=/home/geso/models/gemma-3-12b-it
+(base) geso@ai-host-01:~/models$ MODEL_DIR=~models/gemma-3-12b-it
+(base) geso@ai-host-01:~/models$ sudo docker run -d --gpus all --shm-size 1g -p 8080:80 -v $MODEL_DIR:/data ghcr.io/huggingface/text-generation-inference:latest --model-id /data --num-shard 2 --max-input-tokens 10000 --max-total-tokens 11000 --max-batch-prefill-tokens 10000
+```
+
+
+
 ### Frontend Setup
 
 1. Navigate to the frontend directory:
