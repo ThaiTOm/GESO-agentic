@@ -1,6 +1,5 @@
 from typing import List, Dict
 
-from llm.llm_call import get_structured_llm_output, get_raw_llm_output
 from config import settings
 from context_engine.rag_prompt import (
     CLASSIFICATION_SELECT_FILE_PROMPT,
@@ -12,10 +11,7 @@ from context_engine.rag_prompt import (
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables import Runnable
-from llm.llm_langchain import cloud_llm_service
-
-cloud_llm = cloud_llm_service
-
+from llm.llm_langchain import gemini_llm_service, local_llm_service
 
 def generate_classification_prompt(query: str) -> str:
     return CLASSIFICATION_SELECT_FILE_PROMPT.format(query=query)
@@ -33,7 +29,7 @@ def _extract_code_from_markdown(text: str) -> str:
 
 pandas_chain_cloud = (
     pandas_code_prompt
-    | cloud_llm.bind(max_output_tokens=1024)
+    | local_llm_service.bind(max_output_tokens=1024)
     | StrOutputParser()
     | _extract_code_from_markdown # Pipe the output into our helper!
 )
@@ -49,10 +45,9 @@ final_answer_prompt = ChatPromptTemplate.from_template(
 
 # 2. Create the chain (we'll make one and select the LLM during use)
 def get_final_answer_chain(use_cloud: bool) -> Runnable:
-    llm_to_use = cloud_llm
     return (
         final_answer_prompt
-        | llm_to_use.bind(max_output_tokens=1024) # Use max_output_tokens for Gemini
+        | local_llm_service.bind(max_output_tokens=1024) # Use max_output_tokens for Gemini
         | StrOutputParser()
         | _extract_code_from_markdown # Reuse our helper
     )
@@ -61,18 +56,16 @@ def get_final_answer_chain(use_cloud: bool) -> Runnable:
 reformulation_prompt = ChatPromptTemplate.from_template(REFORMULATION_PROMPT) # Assuming the prompt has {chat_history} and {query}
 
 # 2. Create the chain
-llm_for_reformulation = cloud_llm
 reformulation_chain = (
     reformulation_prompt
-    | llm_for_reformulation.bind()
+    | gemini_llm_service.bind()
     | StrOutputParser()
 )
 
 # 3. Create the new async function that wraps the logic
 async def reformulate_query_with_chain(query: str, chat_history: List[Dict]) -> str:
     """Reformulates a query to be standalone if chat history exists."""
-    print("This things run")
-    print(chat_history)
+
     if not chat_history:
         return query
 

@@ -9,9 +9,9 @@ from langgraph.graph import StateGraph, END
 from typing_extensions import TypedDict
 
 # Your custom LLM caller
-from llm.llm_langchain import cloud_llm_service
+from llm.llm_langchain import local_llm_service, gemini_llm_service
 
-llm = cloud_llm_service
+llm = gemini_llm_service
 
 
 # --- Pydantic Models for Structured Output ---

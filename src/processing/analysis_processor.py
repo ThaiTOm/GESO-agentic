@@ -3,7 +3,7 @@ import pickle
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from config import settings
-from llm.llm_langchain import cloud_llm_service
+from llm.llm_langchain import gemini_llm_service, local_llm_service
 from context_engine.rag_prompt import SELECT_EXCEL_FILE_PROMPT_TEMPLATE
 from typing import Tuple, Optional, Dict, Any
 import os
@@ -256,7 +256,7 @@ async def select_excel_database(query: str, found_collection: str, cloud: bool =
 
     selected_db_name = None
     try:
-        cloud_llm = cloud_llm_service
+        cloud_llm = gemini_llm_service
         raw_prompt_template = ChatPromptTemplate.from_template("{prompt}")
         llm_to_use = cloud_llm.bind(max_output_tokens=32)
         simple_chain = raw_prompt_template | llm_to_use | StrOutputParser()

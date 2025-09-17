@@ -1,8 +1,9 @@
+import requests
+
 from rag_components.chatbot_manager import get_chatbot_name_by_api_key
 from rag_components.llm_interface import reformulate_query_with_chain, get_final_answer_chain
 from database.typesense_search import get_all_chunks_of_page, perform_vector_search
 from typing_class.rag_type import *
-from llm.llm_call import get_raw_llm_output
 from processing.document_processor import *
 from llm.ModelEmbedding import get_embedding_model_service
 embeddings_service = get_embedding_model_service()
@@ -223,22 +224,6 @@ def search_documents(query_text, top_k=10):
         return {'hits': []}  # Return empty results if search fails
 
 
-async def call_llm_api(prompt, max_tokens=256, temperature=0.0):
-    try:
-        cloud_llm = get_llm_cloud_model_service()
-        raw_prompt_template = ChatPromptTemplate.from_template("{prompt}")
-        llm_to_use = cloud_llm.bind(max_output_tokens=max_tokens)
-        simple_chain = raw_prompt_template | llm_to_use | StrOutputParser()
-        result = await simple_chain.ainvoke({"input_prompt": prompt})
-
-        # Extract and return just the generated text
-        if "choices" in result and len(result["choices"]) > 0:
-            generated_text = result["choices"][0]["text"].strip(".\n\n")
-            return generated_text
-        else:
-            return "Không nhận được phản hồi từ mô hình"
-    except Exception as e:
-        return f"Lỗi khi gọi LLM: {str(e)}"
 
 def format_numbers_in_string(text):
     """
@@ -474,60 +459,3 @@ async def process_rag_query(request, api_key, typesense_client) -> Dict[str, Any
         logger.error(f"Error processing RAG query: {e}", exc_info=True)
         # FIX: Log full error, return generic message
         raise HTTPException(status_code=500, detail="An internal server error occurred while processing your query.")
-
-
-async def generate_suggested_questions(request) -> Dict[str, List[str]]:
-    """Generates 3 suggested follow-up questions based on context."""
-    start_time = time.time()
-    try:
-        # Determine file type
-        file_type = "PDF"  # Default
-        if request.file_name and (request.file_name.endswith('.xlsx') or request.file_name.startswith('database_no')):
-            file_type = "EXCEL"
-
-        # Logic for EXCEL
-        if file_type == "EXCEL":
-            # (Assuming analyze_dataframe exists and works as intended)
-            # This part remains complex due to its specific nature
-            # ... existing excel logic would go here, refactored for clarity ...
-            suggested_questions = ["Analyze this data by region.", "What are the top 5 products by revenue?",
-                                   "Show the monthly sales trend."]
-
-        # Logic for PDF
-        else:
-            if not request.context or len(request.context) < 100:
-                logger.warning("Context is too short for generating high-quality questions.")
-                return {"suggested_questions": [
-                    "Can you provide more details about the main topic?",
-                    "What are the key takeaways from this document?",
-                    "Are there any related concepts I should know about?"
-                ]}
-
-            prompt = SUGGEST_PDF_QUESTIONS_PROMPT.format(
-                file_name=request.file_name,
-                previous_response=request.previous_response,
-                context=request.context
-            )
-            result = await call_llm(prompt, max_tokens=512, temperature=0.7, cloud=not settings.SELF_HOST)
-
-            # Post-process and clean the generated questions
-            raw_questions = [q.strip() for q in result.strip().split("\n") if q.strip()]
-            suggested_questions = [re.sub(r'^\s*[\d\.\-\*]+\s*', '', q) for q in raw_questions]
-            suggested_questions = [q for q in suggested_questions if len(q) > MIN_QUESTION_LENGTH][:3]
-
-        # Ensure we always return 3 questions
-        default_questions = [
-            "Can you explain this in more detail?",
-            "What is the significance of this information?",
-            "How does this apply to a real-world scenario?"
-        ]
-        while len(suggested_questions) < 3:
-            suggested_questions.append(default_questions[len(suggested_questions) % len(default_questions)])
-
-        execution_time = time.time() - start_time
-        logger.info(f"Generated suggested questions in {execution_time:.2f} seconds.")
-        return {"suggested_questions": suggested_questions}
-
-    except Exception as e:
-        logger.error(f"Error generating suggested questions: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="An error occurred while generating suggestions.")

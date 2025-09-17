@@ -8,9 +8,8 @@ from typing_class.rag_type import *
 from rag_components.chatbot_manager import *
 from processing.analysis_processor import select_excel_database
 from rag_components.agents.data_analyst_agent import analyze_dataframe
-from llm.llm_langchain import cloud_llm_service
+from llm.llm_langchain import gemini_llm_service, local_llm_service
 
-llm = cloud_llm_service
 
 # Initialize logger
 logger = logging.getLogger(__name__)
@@ -47,7 +46,7 @@ async def query_analyze_rag_document(request: QueryRequest, api_key: str = Heade
     - **Danh sách:** Sử dụng gạch đầu dòng (-) hoặc danh sách có thứ tự (1., 2.) để liệt kê các ý.
     - **Viết hoa:** Luôn viết hoa tên riêng, tên người, tên sản phẩm, và các danh từ riêng quan trọng.
     - **Cấu trúc:** Phân chia nội dung thành các đoạn văn ngắn, có tiêu đề rõ ràng nếu cần.
-    - **Lưu ý:** Tuyệt đối không sử dụng định dạng bảng.
+    - **Lưu ý:** Tuyệt đối không sử dụng định dạng bảng, chỉ trả lời dựa trên câu trả lời từ người dùng, không được thêm kiến thức khác.
 
     **Đây là câu trả lời hãy chỉ cho ra kết quả cuối cùng, không kèm thêm gì**
      - **Câu trả lời:** "{answer}"
@@ -56,7 +55,7 @@ async def query_analyze_rag_document(request: QueryRequest, api_key: str = Heade
 
     summarizer_chain = (
             prompt
-            | llm.bind(max_output_tokens=512)  # Pass parameters here!
+            | local_llm_service.bind(max_output_tokens=512)  # Pass parameters here!
             | StrOutputParser()
     )
 

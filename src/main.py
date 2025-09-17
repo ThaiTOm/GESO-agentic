@@ -7,9 +7,7 @@ from graph.main_graph import build_graph
 from config import settings
 import os
 
-os.environ["LANGSMITH_TRACING_V2"] = settings.LANGSMITH_TRACING_V2
-os.environ["LANGSMITH_API_KEY"] = settings.LANGSMITH_API_KEY
-os.environ["LANGSMITH_PROJECT"] = settings.LANGSMITH_PROJECT
+
 # --- FastAPI Application Setup ---
 
 app = FastAPI(

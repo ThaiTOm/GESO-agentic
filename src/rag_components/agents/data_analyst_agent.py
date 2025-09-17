@@ -3,6 +3,7 @@ import hashlib
 import pandas as pd
 from langchain_core.output_parsers import PydanticOutputParser
 from pydantic_ai import Agent
+from llm.llm_langchain import local_llm_service, gemini_llm_service
 
 from llm.provider import LLMModels
 from utils.helper_rag import format_numbers_in_string
@@ -203,7 +204,7 @@ def analyze_dataframe(query: str, df: pd.DataFrame, master_data: str, row_rules:
     }
 
     # ===== Code Generation =====
-    analyst = DataAnalystAgent(model=LLMModels.local_model)
+    analyst = DataAnalystAgent(model=gemini_llm_service)
     try:
         # 1. Set up the parser using your Pydantic class
         parser = PydanticOutputParser(pydantic_object=CodeOutput)

@@ -14,9 +14,8 @@ from context_engine.graph_prompt import *
 from types import SimpleNamespace
 
 # Your custom, model-agnostic LLM caller
-from llm.llm_langchain import cloud_llm_service
-
-llm = cloud_llm_service
+from llm.llm_langchain import gemini_llm_service, local_llm_service
+llm = gemini_llm_service
 
 class RelevantPlotsDecision(BaseModel):
     """Defines the output for the plot filtering decision."""
