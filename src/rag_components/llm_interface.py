@@ -49,7 +49,6 @@ def get_final_answer_chain(use_cloud: bool) -> Runnable:
         final_answer_prompt
         | local_llm_service.bind(max_output_tokens=1024) # Use max_output_tokens for Gemini
         | StrOutputParser()
-        | _extract_code_from_markdown # Reuse our helper
     )
 
 

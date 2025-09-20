@@ -1,11 +1,11 @@
-import json
 from datetime import timezone
-from typing import Optional, Any
-
-import openpyxl
 import pandas as pd
-from fastapi import Depends, Query, APIRouter, HTTPException, UploadFile, File, Header, Form
+from fastapi import Depends, Query, APIRouter, UploadFile, File, Header
 from pydantic import ValidationError
+
+from database.redis_connection import flush_redis_database
+from processing.analysis_processor import _read_excel_file_data
+from processing.query_retrieval_processor import get_classifier_pipeline
 from utils import helper_rag
 from typing_class.rag_type import *
 from database.typesense_declare import get_typesense_instance_service
@@ -14,12 +14,17 @@ from config import settings
 import aiofiles
 import os
 
+from utils.helper import parse_master_sheet, standardize_text
+
+shared_pipeline = get_classifier_pipeline()
+
 from typing_class.rag_type import PermissionConfig
 
 # Initialize logger
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
+# flush_redis_database()
 
 # Helper dependency to get Typesense client
 def get_typesense_client():
@@ -118,7 +123,7 @@ async def process_pdf_endpoint(chatbot_name: str,
                                permissions_str: Optional[str] = Form(None, alias="permissions"),
                                ):
     """Upload và xử lý file PDF, index vào collection của chatbot."""
-
+    flush_redis_database()
     if permissions_str:
         try:
             # Manually parse the JSON string
@@ -127,7 +132,6 @@ async def process_pdf_endpoint(chatbot_name: str,
             permissions = PermissionConfig(**permissions_data)
 
             # If we get here, everything is valid
-            permissions_message = "Permission rules were provided and saved."
             print(f"Received and validated permission configuration for bot: {permissions.botName}")
             print(permissions)
             # db.save_permission_config(chatbot_name, permissions.dict())
@@ -149,58 +153,119 @@ async def process_pdf_endpoint(chatbot_name: str,
                 "num_chunks": result["num_chunks"],
                 "file_type": "pdf"
             }
-        else:
-            chatbot_directory = os.path.join(settings.UPLOAD_DIR, chatbot_name)
-            os.makedirs(chatbot_directory, exist_ok=True)
-            destination_path = os.path.join(chatbot_directory, file.filename)
 
+        chatbot_directory = os.path.join(settings.UPLOAD_DIR, chatbot_name)
+        os.makedirs(chatbot_directory, exist_ok=True)
+        destination_path = os.path.join(chatbot_directory, file.filename)
+
+        try:
+            async with aiofiles.open(destination_path, 'wb') as out_file:
+                while content := await file.read(1024):
+                    await out_file.write(content)
+        except Exception as e:
+            return {"error": f"Could not save file: {e}"}
+
+        if destination_path.lower().endswith(('.xlsx', '.xls')):
             try:
-                async with aiofiles.open(destination_path, 'wb') as out_file:
-                    while content := await file.read(1024):
-                        await out_file.write(content)
-            except Exception as e:
-                return {"error": f"Could not save file: {e}"}
+                # --- 1. ĐỌC TẤT CẢ SHEET TỪ FILE GỐC ---
+                all_sheets_dfs = pd.read_excel(destination_path, sheet_name=None, engine='openpyxl')
 
-            if destination_path.lower().endswith(('.xlsx', '.xls')):
-                try:
+                # Xác định tên các sheet (linh hoạt với chữ hoa/thường)
+                data_sheet_name = next((s for s in all_sheets_dfs if s.lower() == 'data'), None)
+                master_sheet_name = next((s for s in all_sheets_dfs if s.lower() == 'master'), None)
+
+                if not data_sheet_name:
+                    # Nếu không có sheet 'data', ta giả định sheet đầu tiên là sheet dữ liệu
+                    data_sheet_name = list(all_sheets_dfs.keys())[0]
+
+                data_df = all_sheets_dfs[data_sheet_name]
+
+                # --- 2. XỬ LÝ SHEET DATA: THÊM CỘT CHUẨN HÓA ---
+                string_columns = data_df.select_dtypes(include=['object']).columns
+                standardized_cols_map = {}  # Lưu map từ cột gốc -> cột chuẩn hóa
+                print("Step 2: Standardizing text columns...")
+                print(f"String columns found: {list(string_columns)}")
+
+                for col_name in string_columns:
+                    new_col_name = f"{col_name}_chuanhoa"
+                    data_df[new_col_name] = data_df[col_name].astype(str).apply(standardize_text)
+                    standardized_cols_map[col_name] = new_col_name
+
+                print(f"Standardized columns added: {list(standardized_cols_map.values())}")
+                # Cập nhật lại DataFrame trong dictionary
+                all_sheets_dfs[data_sheet_name] = data_df
+
+                # --- 3. XỬ LÝ SHEET MASTER: CẬP NHẬT MIÊU TẢ ---
+                if master_sheet_name and master_sheet_name in all_sheets_dfs:
+                    master_df = all_sheets_dfs[master_sheet_name]
+                    if not master_df.empty:
+                        master_col_name = master_df.columns[0]
+                        original_descriptions = parse_master_sheet(master_df, list(string_columns))
+                        print(f"Original descriptions extracted: {list(original_descriptions.keys())}")
+
+                        new_master_content = []
+                        for line in master_df[master_col_name].dropna().astype(str):
+                            new_master_content.append(line)
+                            col_original = line.split(":")[0]
+                            if col_original in standardized_cols_map:
+                                new_col_name = standardized_cols_map[col_original]
+                                original_desc = original_descriptions.get(col_original, "Không có miêu tả gốc.")
+
+                                new_desc_lines = [
+                                    new_col_name + f": Đây là cột dữ liệu được chuẩn hóa từ cột '{col_original}'." +
+                                    "Dữ liệu đã được loại bỏ dấu, chuyển thành chữ thường và xóa khoảng trắng để phục vụ tìm kiếm." +
+                                    original_desc
+                                ]
+                                new_master_content.extend(new_desc_lines)
+
+                        updated_master_df = pd.DataFrame(new_master_content, columns=[master_col_name])
+                        all_sheets_dfs[master_sheet_name] = updated_master_df
+
+                # --- 4. XỬ LÝ SHEET PERMISSION (NẾU CÓ) ---
+                permission_df = None
+                if permissions_str:
                     if hasattr(permissions, 'model_dump'):
-                        permissions_dict = permissions.model_dump()  # Pydantic v2+
+                        permissions_dict = permissions.model_dump()
                     else:
-                        permissions_dict = permissions.dict()  # Pydantic v1
+                        permissions_dict = permissions.dict()
 
-                    # Prepare data for a two-column DataFrame (Key, Value)
-                    # This is much more readable in Excel than trying to map a complex structure.
-                    data_for_df = []
-                    for key, value in permissions_dict.items():
-                        # IMPORTANT: If a value is a list or dict, convert it to a string
-                        # so it can be stored cleanly in a single Excel cell.
-                        if isinstance(value, (list, dict)):
-                            string_value = json.dumps(value)
-                        else:
-                            string_value = str(value)
-                        data_for_df.append([key, string_value])
+                    if permissions_dict:
+                        data_for_df = []
+                        for key, value in permissions_dict.items():
+                            string_value = json.dumps(value) if isinstance(value, (list, dict)) else str(value)
+                            data_for_df.append([key, string_value])
+                        permission_df = pd.DataFrame(data_for_df, columns=['Permission', 'Value'])
 
-                    # Create the DataFrame
-                    permission_df = pd.DataFrame(data_for_df, columns=['Permission', 'Value'])
+                # --- 5. GHI TẤT CẢ CÁC SHEET ĐÃ CẬP NHẬT TRỞ LẠI FILE ---
+                # Sử dụng mode='w' để ghi đè file với nội dung mới từ dictionary all_sheets_dfs
+                with pd.ExcelWriter(destination_path, engine='openpyxl', mode='w') as writer:
+                    # Ghi lại tất cả các sheet đã được sửa đổi (data, master) và các sheet không đổi
+                    for sheet_name, df_to_write in all_sheets_dfs.items():
+                        df_to_write.to_excel(writer, sheet_name=sheet_name, index=False)
 
-                    # Use pandas ExcelWriter to ADD the new sheet with the data
-                    with pd.ExcelWriter(destination_path, engine='openpyxl', mode='a',
-                                        if_sheet_exists='replace') as writer:
+                    # Ghi thêm sheet 'permission' nếu nó đã được tạo
+                    if permission_df is not None:
                         permission_df.to_excel(writer, sheet_name="permission", index=False)
 
-                except Exception as e:
-                    # Handle potential errors during Excel modification
-                    return {"error": f"Could not add 'permission' sheet: {e}"}
+                print("Successfully wrote all updated sheets to the file.")
 
-            return {
-                "status": "success",
-                "message": "File processed and indexed successfully",
-                "document_id": "",
-                "file_name": "",
-                "num_chunks": 1,
-                "file_type": "excel"
-            }
+                # --- 6. CÁC BƯỚC XỬ LÝ TIẾP THEO ---
+                _, _, _, description, _ = _read_excel_file_data(str(destination_path))
+                shared_pipeline = get_classifier_pipeline()
+                shared_pipeline.add_or_update_category(destination_path, description)
 
+            except Exception as e:
+                # Thay đổi thông báo lỗi để rõ ràng hơn
+                return {"error": f"An error occurred while processing the Excel file: {e}"}
+
+        return {
+            "status": "success",
+            "message": "File processed, standardized, and indexed successfully",
+            "document_id": "",
+            "file_name": "",
+            "num_chunks": 1,
+            "file_type": "excel"
+        }
     except helper_rag.DocumentProcessingError as e:
         raise HTTPException(status_code=500, detail=str(e))
     except Exception as e:
@@ -234,3 +299,19 @@ async def get_chatbot_info(request: ChatbotInfoRequest, typesense_client: Any = 
         raise HTTPException(status_code=401, detail=str(e))
     except Exception:
         raise HTTPException(status_code=500, detail="An internal error occurred.")
+
+
+@router.delete("/typesense/document/delete/{chatbotName}/{documentTitle}")
+async def delete_excel_document(chatbotName:str, documentTitle:str):
+    """Xóa file excel đã upload"""
+    flush_redis_database()
+    try:
+        file_path = os.path.join(settings.UPLOAD_DIR, chatbotName, documentTitle)
+        if os.path.exists(file_path):
+            os.remove(file_path)
+            return {"status": "success", "message": f"File '{documentTitle}' deleted successfully from chatbot '{chatbotName}'."}
+        else:
+            return {"status": "error", "message": f"File '{documentTitle}' not found in chatbot '{chatbotName}'."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"An error occurred while deleting the file: {e}")
+

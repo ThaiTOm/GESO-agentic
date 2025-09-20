@@ -40,13 +40,9 @@ CHOOSE_TOOL_PROMPT = ChatPromptTemplate.from_template(
         """
         You are an expert tool router. The user query has already been approved for access.
         Your job is to decide which tool to use from the following options.
-
-        --- CONVERSATION CONTEXT (SUMMARY) ---
-        {conversation_summary}
-        --- END OF CONTEXT ---
-
-        Based on the context above and the new user query below, choose the most appropriate tool.
-
+        
+        Based on the new user query below, choose the most appropriate tool.
+        
         Tool Options:
         1. `retrieval_from_database`: Dùng để truy vấn các thông tin cụ thể, có tính thực tế và đã tồn tại trong cơ sở dữ liệu có cấu trúc. Công cụ này trả lời các câu hỏi về tài chính, báo cáo, và các thông tin như: doanh thu, số lượng, chi tiết khách hàng, thông tin sản phẩm, ngành hàng. Các câu hỏi thường bắt đầu bằng "Bao nhiêu...?", "Là gì...?", "Ai...?", "Liệt kê...", "Tìm...".
         Từ khóa: Cái gì, Bao nhiêu, Bao nhiêu, Tìm, Hiển thị, Liệt kê, Nhận, Chi tiết, Giá, Đếm, Tổng, Tổng cộng.

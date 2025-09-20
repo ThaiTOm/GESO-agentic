@@ -4,6 +4,9 @@ from langchain_core.output_parsers import StrOutputParser, PydanticOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from pydantic import BaseModel, Field
 from langgraph.graph import StateGraph, END
+
+from processing.query_retrieval_processor import get_classifier_pipeline
+from rag_components.llm_interface import reformulate_query_with_chain
 from typing_class.rag_type import QueryRequest
 from typing_class.graph_type import OrchestratorState
 from graph.call_api_routes import *
@@ -143,18 +146,31 @@ async def tool_router_node(state: OrchestratorState) -> dict:
     Node 2: The dispatcher. If authorized, decides which tool to use.
     """
     print("--- NODE: Tool Router ---")
-    query = state['query']
     # --- NEW: Get the summary from the state ---
     conversation_summary = state.get("conversation_summary", "Đây là lượt đầu tiên của cuộc trò chuyện.")
+
+    reformulated_query = await reformulate_query_with_chain(
+        query=state['query'],
+        chat_history=state['chat_history']
+    )
+
+    instance_finding = get_classifier_pipeline()
+    result = instance_finding(reformulated_query)
+
+    if result == "FOUND":
+        print("The query is classified to use retrieval from database")
+        reformulated_query = "Tìm nội dung trong retrieval_from_database, " + reformulated_query
 
     parser = PydanticOutputParser(pydantic_object=ToolRouterDecision)
     router_chain = CHOOSE_TOOL_PROMPT | llm | parser
 
     decision = await router_chain.ainvoke({
-        "query": query,
-        "conversation_summary": conversation_summary,
+        "query": reformulated_query,
         "format_instructions": parser.get_format_instructions()
     })
+
+    # TODO: decision need to be rethingking again, because we need to be choose between RAG and DB retrieval
+
 
     if not decision:
         return {"tool_to_use": "none", "tool_input": {}}
@@ -163,12 +179,11 @@ async def tool_router_node(state: OrchestratorState) -> dict:
     print(f"--- ROUTER DECISION: Tool='{tool_name}' ---")
 
     tool_input = {}
-    query = (f"**Câu hỏi từ người dùng**: {query}")
     ### MODIFIED: Added logic to handle the new tool and prepare its input ###
     if tool_name in ["rag", "retrieval_from_database"]:
         # Both RAG and DB retrieval can use a similar input structure
         tool_input = QueryRequest(
-            query=query,
+            query=reformulated_query,
             top_k=state.get("top_k", 10),
             include_sources=state.get("include_sources", True),
             chat_history=state.get("chat_history", []),

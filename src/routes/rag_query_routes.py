@@ -20,13 +20,13 @@ router = APIRouter()
 async def query_analyze_rag_document(request: QueryRequest, api_key: str = Header(...), typesense_client: Any = Depends(get_typesense_client)):
     collection_name = get_chatbot_name_by_api_key(typesense_client, api_key)
 
-    reformulated_query = await reformulate_query_with_chain(
-        query=request.query,
-        chat_history=request.chat_history
-    )
+    # reformulated_query = await reformulate_query_with_chain(
+    #     query=request.query,
+    #     chat_history=request.chat_history
+    # )
 
     excel_database, master_sheet, row_rules, selected_db, db_description = await select_excel_database(
-        reformulated_query, collection_name)
+        request.query, collection_name)
 
     if excel_database is None:
         return {
@@ -34,12 +34,14 @@ async def query_analyze_rag_document(request: QueryRequest, api_key: str = Heade
         }
 
 
-    result_analyze = analyze_dataframe(df=excel_database, query=reformulated_query, master_data=master_sheet, row_rules=row_rules, user_id=request.user_id, user_role=request.user_role)
+    result_analyze = analyze_dataframe(df=excel_database, query=request.query, master_data=master_sheet, row_rules=row_rules, user_id=request.user_id, user_role=request.user_role)
     answer = result_analyze.get("result", None)
+    reason = result_analyze.get("reason", None)
+
 
     # Pretty the answer
     prompt = ChatPromptTemplate.from_template("""
-    Bạn là một trợ lý chuyên về định dạng văn bản. Nhiệm vụ của bạn là trình bày lại câu trả lời dưới đây một cách chuyên nghiệp và dễ đọc, hãy lịch sự.
+    Bạn là một trợ lý chuyên về định dạng văn bản. Nhiệm vụ của bạn là trình bày lại câu trả lời dưới đây một cách chuyên nghiệp và dễ đọc, lịch sự, và hãy nói sơ qua về lý do bạn làm như vậy (nói đơn giản dễ hiểu, không đề cập đến kỹ thuật như dataframe, cột, dòng, etc).
 
     **Yêu cầu định dạng:**
     - **In đậm:** Sử dụng in đậm cho các tiêu đề chính hoặc các thuật ngữ quan trọng.
@@ -51,6 +53,8 @@ async def query_analyze_rag_document(request: QueryRequest, api_key: str = Heade
     **Đây là câu trả lời hãy chỉ cho ra kết quả cuối cùng, không kèm thêm gì**
      - **Câu trả lời:** "{answer}"
      - **Câu hỏi của người dùng:** "{query}"
+     - **Lý do phân tích:** "{reason}"
+     - **Tổng quan dữ liệu và các cột có trong dữ liệu:** "{db_description}"
     """)
 
     summarizer_chain = (
@@ -62,11 +66,15 @@ async def query_analyze_rag_document(request: QueryRequest, api_key: str = Heade
     # 3. Invoke the chain with the necessary inputs
     answer_fn = await summarizer_chain.ainvoke({
         "answer": answer,
-        "query": reformulated_query
+        "query": request.query,
+        "reason": reason,
+        "db_description": db_description[:400]
     })
 
     if answer is None:
         answer_fn = f"Rất tiếc, tôi chưa có thông tin về vấn đề này. Vui lòng liên hệ bộ phận hỗ trợ phù hợp để được giải đáp."
+
+    print(answer_fn)
 
     return {
         "query": request.query,
@@ -78,6 +86,6 @@ async def query_analyze_rag_document(request: QueryRequest, api_key: str = Heade
             "file_name": selected_db,
             "database_description": db_description[:100] + "..." if len(db_description) > 100 else db_description,
             "original_query": request.query,
-            "rewritten_query": reformulated_query
+            "rewritten_query": request.query
         }
     }

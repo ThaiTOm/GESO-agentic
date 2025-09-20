@@ -39,7 +39,6 @@ def delete_dataframe_from_cache(file_path: str):
     except redis.exceptions.ConnectionError as e:
         print(f"Redis connection error: {e}. Could not delete key.")
 
-
 def flush_redis_database():
     """
     Deletes ALL keys in the current Redis database.

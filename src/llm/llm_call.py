@@ -5,7 +5,7 @@ import httpx
 import json
 import logging
 import threading
-from typing import List, Optional
+from typing import List, Optional, Any, Dict
 from types import SimpleNamespace  # <--- NEW: For creating mock response objects
 
 # Google Gemini imports
@@ -90,9 +90,8 @@ class GeminiService:
 class LocalService:
     """
     Represents a worker for a local TGI/Ollama-compatible model endpoint.
-    It mimics the GeminiService interface for seamless integration into the pool.
+    This version does NOT perform client-side token counting.
     """
-
     def __init__(self, base_url: str, model_name: str):
         self.base_url = base_url
         self.model_name = model_name
@@ -100,54 +99,55 @@ class LocalService:
         logging.info(f"{self.service_id} initialized for model '{model_name}'.")
 
     def _create_mock_response(self, text_content: str) -> SimpleNamespace:
-        """
-        Creates a mock response object that has a `.text` attribute,
-        similar to Gemini's response, so the LangChain model can process it.
-        We also add model_name for consistent generation_info.
-        """
+        """Creates a simple response object with .text and .model_name attributes."""
         return SimpleNamespace(text=text_content, model_name=self.model_name)
 
-    async def call_api_async(self, prompt: str, max_output_tokens: int, temperature: float) -> Optional[
-        SimpleNamespace]:
-        """Makes an ASYNCHRONOUS API call to the local model."""
+    async def call_api_async(self, messages: List[Dict[str, str]], max_output_tokens: int, temperature: float) -> Optional[SimpleNamespace]:
+        """Makes an ASYNCHRONOUS API call to the local model's CHAT endpoint."""
+        # The 'messages' argument is now the structured list of dicts
         payload = {
             "model": self.model_name,
-            "prompt": prompt,
-            "max_tokens": max_output_tokens,
-            "temperature": temperature, "stream": False
+            "messages": messages, # <-- Use the structured messages directly
+            "max_tokens": max_output_tokens, "temperature": temperature, "stream": False
         }
         headers = {"Content-Type": "application/json"}
-        logging.info(f"{self.service_id} | Starting async request.")
+        endpoint_url = f"{self.base_url}/chat/completions"
+        logging.info(f"{self.service_id} | Starting async request to {endpoint_url} with payload: {payload}") # Added logging
         try:
-            response = await async_http_client.post(self.base_url, headers=headers, json=payload)
+            response = await async_http_client.post(endpoint_url, headers=headers, json=payload)
             response.raise_for_status()
             data = response.json()
-            text_result = data.get("choices", [{}])[0].get("text", "")
+            text_result = data.get("choices", [{}])[0].get("message", {}).get("content", "")
             logging.info(f"{self.service_id} | Async request finished successfully.")
             return self._create_mock_response(text_result)
         except Exception as e:
+            # Enhanced logging for 422 errors
+            if isinstance(e, httpx.HTTPStatusError) and e.response.status_code == 422:
+                 logging.error(f"{self.service_id} | 422 Unprocessable Entity. Server response: {e.response.text}")
             logging.error(f"{self.service_id} | Error calling local model API (async): {e}")
             return None
 
-    def call_api_sync(self, prompt: str, max_output_tokens: int, temperature: float) -> Optional[SimpleNamespace]:
-        """Makes a SYNCHRONOUS API call to the local model."""
+    # --- MODIFIED SYNC METHOD ---
+    def call_api_sync(self, messages: List[Dict[str, str]], max_output_tokens: int, temperature: float) -> Optional[SimpleNamespace]:
+        """Makes a SYNCHRONOUS API call to the local model's CHAT endpoint."""
         payload = {
             "model": self.model_name,
-            "prompt": prompt,
-            "max_tokens": max_output_tokens,
-            "temperature": temperature,
-            "stream": False
+            "messages": messages, # <-- Use the structured messages directly
+            "max_tokens": max_output_tokens, "temperature": temperature, "stream": False
         }
         headers = {"Content-Type": "application/json"}
-        logging.info(f"{self.service_id} | Starting sync request.")
+        endpoint_url = f"{self.base_url}/chat/completions"
+        logging.info(f"{self.service_id} | Starting sync request to {endpoint_url} with payload: {payload}") # Added logging
         try:
-            response = sync_http_client.post(self.base_url, headers=headers, json=payload)
+            response = sync_http_client.post(endpoint_url, headers=headers, json=payload)
             response.raise_for_status()
             data = response.json()
-            text_result = data.get("choices", [{}])[0].get("text", "")
+            text_result = data.get("choices", [{}])[0].get("message", {}).get("content", "")
             logging.info(f"{self.service_id} | Sync request finished successfully.")
             return self._create_mock_response(text_result)
         except Exception as e:
+            if isinstance(e, httpx.HTTPStatusError) and e.response.status_code == 422:
+                 logging.error(f"{self.service_id} | 422 Unprocessable Entity. Server response: {e.response.text}")
             logging.error(f"{self.service_id} | Error calling local model API (sync): {e}")
             return None
 
@@ -193,37 +193,31 @@ class LLMServicePool:
             logging.info(f"Routing to {service.service_id}. Next index will be {self.gemini_next_service_index}.")
             return service
 
-    async def route_call_async(self, provider: str, prompt: str, max_output_tokens: int, temperature: float):
+    async def route_call_async(self, provider: str, request_data: Any, max_output_tokens: int, temperature: float):
         """Routes an ASYNC call to the specified provider."""
         if provider == "gemini":
-            if 'gemini' not in self.services:
-                raise ValueError("Gemini provider selected, but no Gemini services are configured.")
             selected_service = self._get_next_gemini_service()
-            return await selected_service.call_api_async(prompt, max_output_tokens, temperature)
+            # Gemini's method expects a string prompt
+            return await selected_service.call_api_async(request_data, max_output_tokens, temperature)
         elif provider == "local":
-            if 'local' not in self.services:
-                raise ValueError("Local provider selected, but no local service is configured.")
-            # Local service doesn't need round-robin as there's only one endpoint
             selected_service = self.services['local'][0]
-            return await selected_service.call_api_async(prompt, max_output_tokens, temperature)
+            # Local's method expects a list of message dicts
+            return await selected_service.call_api_async(request_data, max_output_tokens, temperature)
         else:
-            raise ValueError(f"Unknown provider: {provider}. Available providers: {list(self.services.keys())}")
+            raise ValueError(f"Unknown provider: {provider}.")
 
-    def route_call_sync(self, provider: str, prompt: str, max_output_tokens: int, temperature: float):
+    def route_call_sync(self, provider: str, request_data: Any, max_output_tokens: int, temperature: float):
         """Routes a SYNC call to the specified provider."""
         if provider == "gemini":
-            if 'gemini' not in self.services:
-                raise ValueError("Gemini provider selected, but no Gemini services are configured.")
             selected_service = self._get_next_gemini_service()
-            return selected_service.call_api_sync(prompt, max_output_tokens, temperature)
+            # Gemini's method expects a string prompt
+            return selected_service.call_api_sync(request_data, max_output_tokens, temperature)
         elif provider == "local":
-            if 'local' not in self.services:
-                raise ValueError("Local provider selected, but no local service is configured.")
             selected_service = self.services['local'][0]
-            return selected_service.call_api_sync(prompt, max_output_tokens, temperature)
+            # Local's method expects a list of message dicts
+            return selected_service.call_api_sync(request_data, max_output_tokens, temperature)
         else:
-            raise ValueError(f"Unknown provider: {provider}. Available providers: {list(self.services.keys())}")
-
+            raise ValueError(f"Unknown provider: {provider}.")
 
 # --- SINGLETON INSTANCE ---
 # This single pool instance now manages ALL connections.

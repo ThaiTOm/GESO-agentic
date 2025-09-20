@@ -154,6 +154,7 @@ The system is built with a modular architecture consisting of several key compon
 export MODEL_DIR=/home/geso/models/gemma-3-12b-it
 (base) geso@ai-host-01:~/models$ MODEL_DIR=~models/gemma-3-12b-it
 (base) geso@ai-host-01:~/models$ sudo docker run -d --gpus all --shm-size 1g -p 8080:80 -v $MODEL_DIR:/data ghcr.io/huggingface/text-generation-inference:latest --model-id /data --num-shard 2 --max-input-tokens 10000 --max-total-tokens 11000 --max-batch-prefill-tokens 10000
+sudo docker run -d   --gpus all   --shm-size 1g   -p 8080:80   -v $MODEL_DIR:/data   -e CUDA_MEMORY_FRACTION=0.7   ghcr.io/huggingface/text-generation-inference:latest   --model-id /data   --num-shard 2   --max-input-tokens 1000   --max-total-tokens 1800   --max-batch-prefill-tokens 1000
 ```
 
 

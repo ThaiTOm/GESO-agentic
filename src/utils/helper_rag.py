@@ -21,7 +21,6 @@ import logging
 import os
 import re
 import uuid
-import time
 from typing import List, Dict, Any
 from fastapi import UploadFile, HTTPException
 
@@ -30,7 +29,7 @@ from context_engine.rag_prompt import *
 # --- Constants ---
 DEFAULT_SEARCH_LIMIT = 100
 MIN_QUESTION_LENGTH = 15
-MAX_CONTEXT_LENGTH_CHARS = 8000 * 4  # ~8k tokens
+MAX_CONTEXT_LENGTH_CHARS = 1000  # ~8k tokens
 
 
 import nest_asyncio
@@ -43,8 +42,7 @@ embedding_service = get_embedding_model_service()
 # Function để tính độ tương đồng giữa chunk và query embedding
 def compute_similarity(chunk_text, query_emb):
     try:
-        chunk_emb = embedding_service.encode(chunk_text).tolist()
-        # Tính cosine similarity
+        chunk_emb = [temp.tolist() for temp in embedding_service.embed_batch(chunk_text)]
         dot_product = sum(a * b for a, b in zip(chunk_emb, query_emb))
         magnitude_a = math.sqrt(sum(a * a for a in chunk_emb))
         magnitude_b = math.sqrt(sum(b * b for b in query_emb))
@@ -186,7 +184,7 @@ def get_context_for_chunk(hit, pdf_pages):
 
 def search_documents(query_text, top_k=10):
     # Generate embedding for query
-    query_embedding = embedding_service.encode(query_text).tolist()
+    query_embedding = embedding_service.embed(query_text).tolist()
 
     # Perform vector search using multi_search
     try:
@@ -211,7 +209,7 @@ def search_documents(query_text, top_k=10):
         # Check if the request was successful
         if vector_response.status_code == 200:
             vector_results = vector_response.json()['results'][0]
-            vector_hits = vector_results.get('hits', [])
+            # vector_hits = vector_results.get('hits', [])
             # print(f"==> Vector search found: {len(vector_hits)} embedding vectors")
             # print("==> vector_results: ", vector_results)
 
@@ -321,7 +319,7 @@ async def process_and_index_pdf(chatbot_name: str, file: UploadFile, typesense_c
                     "chunk_num": chunk_index,
                     "start_index": indices[0] if indices else 0,
                     "end_index": indices[1] if indices else 0,
-                    "embedding": embeddings_service.encode(chunk).tolist()
+                    "embedding": embeddings_service.embed(chunk).tolist()
                 }
                 documents.append(doc)
 
@@ -388,7 +386,7 @@ tuple[str, List[Dict]]:
         context_chunks.append(top_hit_doc.get("text", ""))
 
     # Add text from other top hits to the context pool
-    for hit in hits[1:5]:
+    for hit in hits[1:3]:
         doc = hit.get("document", {})
         context_chunks.append(doc.get("text", ""))
         sources.append({
@@ -405,6 +403,7 @@ tuple[str, List[Dict]]:
     # Build final context string, respecting token limits
     final_context_parts = []
     current_length = 0
+
     for chunk, _ in scored_chunks:
         if current_length + len(chunk) <= MAX_CONTEXT_LENGTH_CHARS:
             final_context_parts.append(chunk)
@@ -413,6 +412,8 @@ tuple[str, List[Dict]]:
             break
 
     combined_context = "\n\n---\n\n".join(final_context_parts)
+    print(combined_context)
+    print(len(combined_context.split(" ")), "chars in combined context")
     return combined_context, sources
 
 
@@ -420,11 +421,8 @@ async def process_rag_query(request, api_key, typesense_client) -> Dict[str, Any
     """Orchestrates the entire RAG query process."""
     try:
         collection_name = get_chatbot_name_by_api_key(typesense_client, api_key)
-        reformulated_query = await reformulate_query_with_chain(
-            query=request.query,
-            chat_history=request.chat_history
-        )
-        query_embedding = embeddings_service.encode(reformulated_query).tolist()
+
+        query_embedding = embeddings_service.embed(request.query).tolist()
 
         hits = perform_vector_search(collection_name, query_embedding, request.top_k, typesense_client)
         if not hits:
@@ -438,7 +436,7 @@ async def process_rag_query(request, api_key, typesense_client) -> Dict[str, Any
         final_answer = await final_answer_chain.ainvoke({
             "knowledge_chunk": combined_context,
             "task_prompt": FINAL_ANSWER_PROMPT,
-            "user_query": reformulated_query
+            "user_query": request.query
         })
 
         return {
@@ -450,7 +448,7 @@ async def process_rag_query(request, api_key, typesense_client) -> Dict[str, Any
                 "collection": collection_name,
                 "file_name": sources[0].get("file_name") if sources else "none",
                 "original_query": request.query,
-                "reformulated_query": reformulated_query
+                "reformulated_query": request.query
             }
         }
     except InvalidAPIKeyError as e:

@@ -2,7 +2,6 @@
 
 from typing import Any, List, Optional, ClassVar
 
-# Assuming GenerateContentResponse is still needed for type hinting
 from google.generativeai.types import GenerateContentResponse
 from langchain_core.callbacks.manager import (
     CallbackManagerForLLMRun,
@@ -11,57 +10,63 @@ from langchain_core.callbacks.manager import (
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import BaseMessage, AIMessage
 from langchain_core.outputs import ChatResult, ChatGeneration
-from pydantic import Field  # <--- NEW: Import Field for model attributes
+from pydantic import Field
+from typing import Any, List, Optional, ClassVar, Dict # <-- Add Dict
+from langchain_core.messages import BaseMessage, AIMessage, SystemMessage, HumanMessage # <-- Add more message types
 
-from config import settings
-import os
-# Import the new refactored pool
 from .llm_call import service_pool, LLMServicePool
 
-os.environ["LANGSMITH_TRACING_V2"] = settings.LANGSMITH_TRACING_V2
-os.environ["LANGSMITH_API_KEY"] = settings.LANGSMITH_API_KEY
-os.environ["LANGSMITH_PROJECT"] = settings.LANGSMITH_PROJECT
+def _convert_lc_messages_to_openai_format(messages: List[BaseMessage]) -> List[Dict[str, str]]:
+    """Converts a list of LangChain messages to the OpenAI API dictionary format."""
+    openai_messages = []
+    for message in messages:
+        if isinstance(message, HumanMessage):
+            role = "user"
+        elif isinstance(message, AIMessage):
+            role = "assistant"
+        elif isinstance(message, SystemMessage):
+            role = "system"
+        else:
+            # Skip or handle other message types if necessary
+            continue
+        openai_messages.append({"role": role, "content": message.content})
+    return openai_messages
 
-# --- REFACTORED: From CustomGeminiChatModel to a more generic CustomLLMChatModel ---
 class CustomLLMChatModel(BaseChatModel):
     """
     A custom LangChain ChatModel that uses our LLMServicePool for API calls.
-
-    This model can be configured to use different providers like 'gemini' or 'local'
-    that are managed by the central service pool.
+    It can be configured to use different providers like 'gemini' or 'local'.
     """
-    # The provider to use for this instance ('gemini' or 'local')
     provider: str = Field(default="gemini")
-
-    # Use ClassVar for the shared pool instance
     service_pool: ClassVar[LLMServicePool] = service_pool
 
     @property
     def _llm_type(self) -> str:
-        """A required property for all custom LLM classes."""
         return "custom_llm_chat_model"
 
+    # --- REVERTED THIS METHOD ---
     def _create_chat_result(self, response: Any) -> ChatResult:
         """
-        Helper to convert API responses (from any provider) into a ChatResult.
-        It now handles both Gemini's rich response and our local mock response.
+        Helper to convert API responses into a ChatResult.
+        It handles both Gemini's rich response and our local mock response.
         """
-        # --- MODIFIED: Handle different response structures ---
+        token_usage = {}
+        model_name = ""
+
         if hasattr(response, 'usage_metadata'):
-            # This is a real Gemini response
+            # This is a Gemini response with token counts
             token_usage = {
                 "prompt_tokens": response.usage_metadata.prompt_token_count,
                 "completion_tokens": response.usage_metadata.candidates_token_count,
                 "total_tokens": response.usage_metadata.total_token_count,
             }
-            # The model name is on the service, but let's get it from the pool config for simplicity
             model_name = self.service_pool.services['gemini'][0].model_name
         else:
-            # This is our mock response from the LocalService
+            # This is our simple response from the LocalService (no token counts)
             token_usage = {
                 "prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0
             }
-            model_name = response.model_name  # We added this to our mock response
+            model_name = response.model_name
 
         generation = ChatGeneration(
             message=AIMessage(content=response.text),
@@ -83,12 +88,19 @@ class CustomLLMChatModel(BaseChatModel):
             **kwargs: Any,
     ) -> ChatResult:
         """SYNCHRONOUS implementation. Routes to the configured provider."""
-        prompt = "\n".join([msg.content for msg in messages])
+        # --- MODIFICATION ---
+        # For Gemini, we still need the flattened prompt.
+        # For Local, we need the structured messages.
+        if self.provider == "local":
+            # Pass the structured messages directly
+            request_data = _convert_lc_messages_to_openai_format(messages)
+        else: # provider is gemini
+            # Flatten for Gemini API
+            request_data = "\n".join([msg.content for msg in messages])
 
-        # --- MODIFIED: Pass the instance's provider to the pool ---
         response = self.service_pool.route_call_sync(
             provider=self.provider,
-            prompt=prompt,
+            request_data=request_data, # Use a generic name
             max_output_tokens=kwargs.get("max_output_tokens", 1024),
             temperature=kwargs.get("temperature", 0.0)
         )
@@ -106,12 +118,15 @@ class CustomLLMChatModel(BaseChatModel):
             **kwargs: Any,
     ) -> ChatResult:
         """ASYNCHRONOUS implementation. Routes to the configured provider."""
-        prompt = "\n".join([msg.content for msg in messages])
+        # --- MODIFICATION ---
+        if self.provider == "local":
+            request_data = _convert_lc_messages_to_openai_format(messages)
+        else: # provider is gemini
+            request_data = "\n".join([msg.content for msg in messages])
 
-        # --- MODIFIED: Pass the instance's provider to the pool ---
         response = await self.service_pool.route_call_async(
             provider=self.provider,
-            prompt=prompt,
+            request_data=request_data, # Use a generic name
             max_output_tokens=kwargs.get("max_output_tokens", 1024),
             temperature=kwargs.get("temperature", 0.0)
         )
@@ -122,8 +137,7 @@ class CustomLLMChatModel(BaseChatModel):
         return self._create_chat_result(response)
 
 
-# An instance configured to use the Gemini provider from the pool
+# --- Instances (Unchanged) ---
 gemini_llm_service = CustomLLMChatModel(provider="gemini")
 
-# An instance configured to use the Local provider from the pool
 local_llm_service = CustomLLMChatModel(provider="local")

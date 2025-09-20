@@ -1,3 +1,7 @@
+import json
+import textwrap
+import time
+
 from langchain_core.messages import HumanMessage
 import hashlib
 import pandas as pd
@@ -9,7 +13,7 @@ from llm.provider import LLMModels
 from utils.helper_rag import format_numbers_in_string
 import numpy as np
 import re
-
+from utils.helper import standardize_text
 
 from pydantic import BaseModel, Field
 
@@ -37,27 +41,77 @@ class DataAnalystAgent:
                 reasoning="Để đếm đơn hàng cho mỗi thành phố, tôi sẽ nhóm theo cột 'ThanhPho' và đếm số lượng.",
                 code="result = df.groupby('ThanhPho').size()"
             )
+        },
+        {
+            "query": "cho biết số cửa hiệu mà Đặng Thị Hồng đang quản lý?",
+            "output": CodeOutput(
+                reasoning="""Để tìm số cửa hiệu của 'Đặng Thị Hồng', tôi sẽ chuẩn hóa cột 'DaiDienKinhDoanh' và chuỗi tìm kiếm (bỏ dấu, chuyển thành chữ thường) rồi mới so sánh. Điều này đảm bảo kết quả chính xác dù người dùng gõ 'đặng thị hồng' hay 'DANG THI HONG'.""",
+                code=textwrap.dedent("""
+                # Chuẩn hóa giá trị tìm kiếm
+                search_value = standardize_text('Đặng Thị Hồng')
+            
+                # Chuẩn hóa cột trong DataFrame và so sánh
+                mask = df['DaiDienKinhDoanh'].astype(str).apply(standardize_text) == search_value
+                result = df.loc[mask, 'CuaHieuQuanLy'].sum()
+                """)
+            )
+        },
+        {
+            "query": "tìm các sản phẩm có chữ 'baby gold'",
+            "output": CodeOutput(
+                reasoning="""Để tìm các sản phẩm chứa 'baby gold', tôi sẽ chuẩn hóa cột 'TenSanPham' và chuỗi tìm kiếm. Sau đó, tôi dùng phương thức .str.contains() để tìm kiếm một phần chuỗi.""",
+                code=textwrap.dedent("""
+                # Chuẩn hóa chuỗi người dùng nhập
+                search_term = standardize_text('baby gold')
+            
+                # Chuẩn hóa cột 'TenSanPham' và tìm kiếm
+                mask = df['TenSanPham'].astype(str).apply(standardize_text).str.contains(search_term, na=False)
+                result = df[mask]
+                """
+            ))
+        },
+        {
+            "query": "Liệt kê các đơn hàng của kho 'hcm_bd'",
+            "output": CodeOutput(
+                reasoning="""Để liệt kê đơn hàng của kho 'hcm_bd', tôi cần chuẩn hóa cả hai vế để so sánh chính xác, loại bỏ ảnh hưởng của chữ hoa/thường và khoảng trắng.""",
+                code=textwrap.dedent("""
+                # Trong trường hợp này, mã kho không có dấu, chỉ cần lower() và strip() là đủ
+                search_value = 'hcm_bd'.lower().strip()
+                mask = df['MaKho'].str.lower().str.strip() == search_value
+                result = df[mask]
+                """
+            ))
         }
     ]
 
     # --- 2. Update the prompt template to include a placeholder for examples ---
     default_instruction = (
-        "You are an expert Python data analyst. Your task is to write Python code to answer a user's question based on a given pandas DataFrame.\n"
-        "The DataFrame is available in a variable named `df`.\n"
-        "Your response MUST be a JSON object that conforms to the provided schema.\n\n"
-        "--- EXAMPLES ---\n"
-        "{examples}\n\n"  # Placeholder for our formatted examples
+        "You are a top-tier Python data analyst AI. Your primary goal is to write robust Python code to answer a user's question about a pandas DataFrame (`df`).\n"
+        "You must follow these guiding principles at all times.\n\n"
+
+        "--- GUIDING PRINCIPLES ---\n"
+        "1.  **Robust Text Comparison (CRITICAL):** User queries often contain text that needs to be compared against DataFrame columns. Human text is inconsistent (e.g., 'Hà Nội' vs 'ha noi'). To handle this, YOU MUST ALWAYS apply a text standardization process for any text-based filtering, searching, or comparison.\n"
+        "    - **Action:** Before comparing, standardize BOTH the user's search term AND the relevant DataFrame column.\n"
+        "    - **Process:** Standardization means converting to lowercase, removing Vietnamese accents (diacritics), and stripping leading/trailing whitespace.\n"
+
+        "2.  **Use Provided Helper Functions:** To assist you, a pre-defined helper function `standardize_text(text)` is available in the execution environment. You should use it for all text normalization tasks as described in Principle #1. Do not redefine this function.\n"
+
+        "3.  **Strict JSON Output:** Your final response MUST BE a single, valid JSON object with two keys: `reasoning` (your thought process, explaining how you apply the principles) and `code` (the executable Python code).\n\n"
+
+        "--- EXAMPLES OF APPLYING THE PRINCIPLES ---\n"
+        "{examples}\n\n"
+
         "--- CURRENT TASK ---\n"
-        "Hôm nay là ngày {time.strftime('%d/%m/%Y')}.\n"
-        "Dưới đây là các thông tin mô tả DataFrame hiện tại: \n"
+        f"Today's date is {time.strftime('%d/%m/%Y')}.\n"
+        "Here is the context for the current DataFrame:\n"
         "####\n"
-        "- Kiểu dữ liệu các cột (df.dtypes): \n"
-        "{df.dtypes} \n\n"
-        "- Ví dụ các giá trị của cột: \n"
+        "- Column Data Types (df.dtypes):\n"
+        "{df_dtypes}\n\n"
+        "- Column Value Examples:\n"
         "{column_examples}\n\n"
-        "- 5 dòng đầu tiên (df.head()): \n"
-        "{df.head(5).to_csv()}\n\n"
-        "Câu hỏi của bạn là: {query}"
+        "- First 5 Rows (df.head()):\n"
+        "{df_head_csv}\n\n"
+        "User's question: {query}"
     )
 
     def __init__(self, model):
@@ -65,14 +119,26 @@ class DataAnalystAgent:
 
     # --- 3. Add a helper method to format the examples into a string ---
     def _format_examples(self) -> str:
-        example_strings = []
+        formatted_list = []
         for example in self._examples:
-            query = example['query']
-            # Use .model_dump_json() for Pydantic v2
-            output_json = example['output'].model_dump_json(indent=2)
-            example_str = f"Question: {query}\nOutput:\n```json\n{output_json}\n```"
-            example_strings.append(example_str)
-        return "\n\n".join(example_strings)
+            query = example["query"]
+            # Cập nhật reasoning trong ví dụ để nó tham chiếu đến NGUYÊN TẮC
+            reasoning = example["output"].reasoning.replace(
+                "Để tìm", "Áp dụng Nguyên tắc #1 (Robust Text Comparison), để tìm"
+            )
+            code = example["output"].code.replace(
+                "# Định nghĩa hàm chuẩn hóa để sử dụng\nfrom unidecode import unidecode\ndef standardize_text(text: str) -> str:\n    if not isinstance(text, str): return \"\"\n    return unidecode(text).lower().strip()\n",
+                "# Using the pre-defined standardize_text() helper function."
+            )
+
+            output_dict = {"reasoning": reasoning, "code": code}
+            json_output = json.dumps(output_dict, ensure_ascii=False, indent=2)
+
+            formatted_list.append(
+                f"Question: {query}\n"
+                f"Answer:\n{json_output}"
+            )
+        return "\n\n".join(formatted_list)
 
     def build_prompt(self, query: str, df: pd.DataFrame):
         column_examples = {}
@@ -85,13 +151,9 @@ class DataAnalystAgent:
         prompt = self.default_instruction.replace(
             "{examples}", formatted_examples
         ).replace(
-            "{df.dtypes}", df.dtypes.to_markdown()
-        ).replace(
-            "{df.head(5).to_csv()}", str(df.head(5).to_csv())
+            "{df_dtypes}", df.dtypes.to_markdown()
         ).replace(
             "{query}", query
-        ).replace(
-            "{column_examples}", str(column_examples)
         )
         print("=============== The prompt after build ")
         print(prompt)
@@ -200,7 +262,8 @@ def analyze_dataframe(query: str, df: pd.DataFrame, master_data: str, row_rules:
     execution_env = {
         "df": df.copy(),  # Prevent mutation of original DataFrame
         "pd": pd,  # Provide pandas as global variable
-        "np": np  # Provide numpy as global variable
+        "np": np,  # Provide numpy as global variable,
+        "standardize_text": standardize_text
     }
 
     # ===== Code Generation =====
@@ -219,7 +282,7 @@ def analyze_dataframe(query: str, df: pd.DataFrame, master_data: str, row_rules:
 
         # 4. Invoke the model with the combined prompt
         messages = [HumanMessage(content=prompt_with_instructions)]
-        response_object = analyst.model.invoke(messages, max_tokens=258)
+        response_object = analyst.model.invoke(messages, max_tokens=258, temperature=0.0)
 
         print("Raw response from model:\n", response_object.content)
 
@@ -231,6 +294,8 @@ def analyze_dataframe(query: str, df: pd.DataFrame, master_data: str, row_rules:
         code = parsed_output.code
         reasoning = parsed_output.reasoning
 
+
+        code = textwrap.dedent(code).strip()
         print(f"AI Reasoning: {reasoning}")
         print("Extracted code:\n", code)
 
@@ -242,7 +307,8 @@ def analyze_dataframe(query: str, df: pd.DataFrame, master_data: str, row_rules:
     try:
         exec(code, execution_env, execution_env)
     except KeyError as e:
-        missing_col = str(e).split("'")[1]
+        print(e)
+        missing_col = str(e)
         return {"result": None, "code": code,
                 "error": f"❌ Thiếu cột '{missing_col}'. Các cột có sẵn: {list(df.columns)}"}
     except Exception as e:
@@ -251,19 +317,18 @@ def analyze_dataframe(query: str, df: pd.DataFrame, master_data: str, row_rules:
                 "error": f"❌ Lỗi thực thi: {e}\nChi tiết DataFrame:\n- Kiểu dữ liệu: {df.dtypes.to_dict()}"}
 
     # ===== Result Handling =====
-    print(execution_env)
     result = execution_env.get("result")
     print("=============== The result code run by AI ")
     result = format_numbers_in_string(str(result))
-    print(result)
+    print(result[:100])
 
 
     if not result or len(result) > 3000:
-        return {"result": None, "code": code,
+        return {"result": None, "reason": None,
                 "error": "⚠️ Không tìm thấy biến 'result'. Kiểm tra logic mã sinh."}
 
     return {
         "result": result,
-        "code": code,
+        "reason": reasoning,
         "error": None
     }

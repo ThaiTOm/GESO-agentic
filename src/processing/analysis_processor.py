@@ -79,22 +79,28 @@ def _read_excel_file_data(file_path: str) -> Tuple[
     # ===================== NEW SECTION END =====================
 
     # Try to read the data sheet (Existing code)
-    data_df = None  # Khởi tạo df để chắc chắn nó tồn tại
     try:
-        # Thêm dtype=str để đọc tất cả các cột dưới dạng chuỗi
-        data_df = pd.read_excel(file_path, sheet_name="data", dtype=str, engine='openpyxl')
+        # ## THAY ĐỔI: Bỏ `dtype=str` để pandas tự suy luận kiểu dữ liệu
+        data_df = pd.read_excel(file_path, sheet_name="data", engine='openpyxl')
     except ValueError:
         logger.info(f"Data sheet not found in {file_path}, attempting to read default sheet.")
         try:
-            # Thêm dtype=str ở đây nữa
-            data_df = pd.read_excel(file_path, dtype=str, engine='openpyxl')
+            # ## THAY ĐỔI: Bỏ `dtype=str` ở đây nữa
+            data_df = pd.read_excel(file_path, engine='openpyxl')
         except Exception as e:
             error_message = f"Error reading default sheet from {file_path}: {e}"
             logger.error(error_message)
-            # return hoặc raise lỗi ở đây nếu cần
     except Exception as e:
         error_message = f"Error reading 'data' sheet from {file_path}: {e}"
         logger.error(error_message)
+
+        # ## THAY ĐỔI: Thêm dòng này để chuyển đổi kiểu dữ liệu một cách thông minh
+        # Kiểm tra nếu data_df được đọc thành công trước khi chuyển đổi
+
+    if data_df is not None:
+        # convert_dtypes() sẽ chuyển các cột số nguyên/thực về Int64/Float64
+        # (có hỗ trợ giá trị rỗng pd.NA), và các kiểu khác nếu có thể.
+        data_df = data_df.convert_dtypes()
 
     print("Permission data ", permission_data)
     # Note the new position of permission_data in the return tuple
@@ -256,9 +262,8 @@ async def select_excel_database(query: str, found_collection: str, cloud: bool =
 
     selected_db_name = None
     try:
-        cloud_llm = gemini_llm_service
         raw_prompt_template = ChatPromptTemplate.from_template("{prompt}")
-        llm_to_use = cloud_llm.bind(max_output_tokens=32)
+        llm_to_use = gemini_llm_service.bind(max_output_tokens=32)
         simple_chain = raw_prompt_template | llm_to_use | StrOutputParser()
         result = await simple_chain.ainvoke({"prompt": prompt})
         print("File choose is ", result)
