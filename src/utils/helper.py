@@ -1,30 +1,74 @@
+import math
 import re
+from typing import Any
 
 import pandas as pd
 from unidecode import unidecode
 
 
-def standardize_text(text: str) -> str:
+def standardize_text_upgraded(
+        text: Any,
+        to_lowercase: bool = True,
+        remove_accents: bool = True,
+        remove_punctuation: bool = True,
+        remove_all_space: bool = True
+) -> str:
     """
-    Chuẩn hóa một chuỗi văn bản:
-    1. Chuyển thành chuỗi (để xử lý các giá trị không phải string như NaN).
-    2. Bỏ dấu tiếng Việt.
-    3. Chuyển thành chữ thường.
-    4. Xóa tất cả các khoảng trắng.
+    Chuẩn hóa một chuỗi văn bản với nhiều tùy chọn linh hoạt.
+
+    Quy trình mặc định:
+    1. Xử lý giá trị đầu vào không phải chuỗi (None, NaN, int,...) -> trả về chuỗi rỗng.
+    2. Bỏ dấu tiếng Việt (nếu remove_accents=True).
+    3. Chuyển thành chữ thường (nếu to_lowercase=True).
+    4. Xóa các ký tự đặc biệt, dấu câu (nếu remove_punctuation=True).
+    5. Xử lý khoảng trắng:
+        - Xóa tất cả khoảng trắng (nếu remove_all_space=True).
+        - Chuẩn hóa về một khoảng trắng duy nhất và xóa khoảng trắng thừa ở đầu/cuối (nếu remove_all_space=False).
+
+    Args:
+        text (Any): Dữ liệu đầu vào cần chuẩn hóa.
+        to_lowercase (bool): True nếu muốn chuyển thành chữ thường.
+        remove_accents (bool): True nếu muốn bỏ dấu tiếng Việt.
+        remove_punctuation (bool): True nếu muốn xóa dấu câu và ký tự đặc biệt.
+        remove_all_space (bool):
+            - True: Xóa tất cả khoảng trắng (e.g., "a b c" -> "abc").
+            - False: Chuẩn hóa về một khoảng trắng duy nhất (e.g., "a   b  c" -> "a b c").
+
+    Returns:
+        str: Chuỗi văn bản đã được chuẩn hóa.
     """
-    if not isinstance(text, str):
-        text = str(text)
+    # 1. Handle non-string, None, or NaN inputs robustly
+    if text is None:
+        return ""
+    # Check for NaN values (e.g., from numpy or pandas)
+    if isinstance(text, float) and math.isnan(text):
+        return ""
 
-    # 1. Bỏ dấu tiếng Việt (e.g., "Sữa" -> "Sua")
-    text_no_accent = unidecode(text)
+    processed_text = str(text)
 
-    # 2. Chuyển thành chữ thường (e.g., "Sua" -> "sua")
-    text_lower = text_no_accent.lower()
+    # 2. Remove Vietnamese accents (e.g., "Sữa Mẹ" -> "Sua Me")
+    if remove_accents:
+        processed_text = unidecode(processed_text)
 
-    # 3. Xóa tất cả khoảng trắng (e.g., "colos baby gold for mom" -> "colosbabygoldformom")
-    text_no_space = re.sub(r'\s+', '', text_lower)
+    # 3. Convert to lowercase (e.g., "Sua Me" -> "sua me")
+    if to_lowercase:
+        processed_text = processed_text.lower()
 
-    return text_no_space
+    # 4. Remove punctuation and special characters (e.g., "sua-me 100%" -> "sua me 100")
+    # This regex keeps letters, numbers, and whitespace.
+    if remove_punctuation:
+        processed_text = re.sub(r'[^a-z0-9\s]', '', processed_text)
+
+    # 5. Handle whitespace based on the flag
+    if remove_all_space:
+        # Remove all whitespace characters (e.g., "sua me 100" -> "suame100")
+        processed_text = re.sub(r'\s+', '', processed_text)
+    else:
+        # Normalize multiple whitespace to a single space and trim
+        # (e.g., "  sua   me   100  " -> "sua me 100")
+        processed_text = re.sub(r'\s+', ' ', processed_text).strip()
+
+    return processed_text
 
 
 def parse_master_sheet(master_df: pd.DataFrame, data_columns: list) -> dict:

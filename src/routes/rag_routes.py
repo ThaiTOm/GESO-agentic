@@ -168,58 +168,58 @@ async def process_pdf_endpoint(chatbot_name: str,
         if destination_path.lower().endswith(('.xlsx', '.xls')):
             try:
                 # --- 1. ĐỌC TẤT CẢ SHEET TỪ FILE GỐC ---
-                all_sheets_dfs = pd.read_excel(destination_path, sheet_name=None, engine='openpyxl')
-
-                # Xác định tên các sheet (linh hoạt với chữ hoa/thường)
-                data_sheet_name = next((s for s in all_sheets_dfs if s.lower() == 'data'), None)
-                master_sheet_name = next((s for s in all_sheets_dfs if s.lower() == 'master'), None)
-
-                if not data_sheet_name:
-                    # Nếu không có sheet 'data', ta giả định sheet đầu tiên là sheet dữ liệu
-                    data_sheet_name = list(all_sheets_dfs.keys())[0]
-
-                data_df = all_sheets_dfs[data_sheet_name]
-
-                # --- 2. XỬ LÝ SHEET DATA: THÊM CỘT CHUẨN HÓA ---
-                string_columns = data_df.select_dtypes(include=['object']).columns
-                standardized_cols_map = {}  # Lưu map từ cột gốc -> cột chuẩn hóa
-                print("Step 2: Standardizing text columns...")
-                print(f"String columns found: {list(string_columns)}")
-
-                for col_name in string_columns:
-                    new_col_name = f"{col_name}_chuanhoa"
-                    data_df[new_col_name] = data_df[col_name].astype(str).apply(standardize_text)
-                    standardized_cols_map[col_name] = new_col_name
-
-                print(f"Standardized columns added: {list(standardized_cols_map.values())}")
-                # Cập nhật lại DataFrame trong dictionary
-                all_sheets_dfs[data_sheet_name] = data_df
-
-                # --- 3. XỬ LÝ SHEET MASTER: CẬP NHẬT MIÊU TẢ ---
-                if master_sheet_name and master_sheet_name in all_sheets_dfs:
-                    master_df = all_sheets_dfs[master_sheet_name]
-                    if not master_df.empty:
-                        master_col_name = master_df.columns[0]
-                        original_descriptions = parse_master_sheet(master_df, list(string_columns))
-                        print(f"Original descriptions extracted: {list(original_descriptions.keys())}")
-
-                        new_master_content = []
-                        for line in master_df[master_col_name].dropna().astype(str):
-                            new_master_content.append(line)
-                            col_original = line.split(":")[0]
-                            if col_original in standardized_cols_map:
-                                new_col_name = standardized_cols_map[col_original]
-                                original_desc = original_descriptions.get(col_original, "Không có miêu tả gốc.")
-
-                                new_desc_lines = [
-                                    new_col_name + f": Đây là cột dữ liệu được chuẩn hóa từ cột '{col_original}'." +
-                                    "Dữ liệu đã được loại bỏ dấu, chuyển thành chữ thường và xóa khoảng trắng để phục vụ tìm kiếm." +
-                                    original_desc
-                                ]
-                                new_master_content.extend(new_desc_lines)
-
-                        updated_master_df = pd.DataFrame(new_master_content, columns=[master_col_name])
-                        all_sheets_dfs[master_sheet_name] = updated_master_df
+                # all_sheets_dfs = pd.read_excel(destination_path, sheet_name=None, engine='openpyxl')
+                #
+                # # Xác định tên các sheet (linh hoạt với chữ hoa/thường)
+                # data_sheet_name = next((s for s in all_sheets_dfs if s.lower() == 'data'), None)
+                # master_sheet_name = next((s for s in all_sheets_dfs if s.lower() == 'master'), None)
+                #
+                # if not data_sheet_name:
+                #     # Nếu không có sheet 'data', ta giả định sheet đầu tiên là sheet dữ liệu
+                #     data_sheet_name = list(all_sheets_dfs.keys())[0]
+                #
+                # data_df = all_sheets_dfs[data_sheet_name]
+                #
+                # # --- 2. XỬ LÝ SHEET DATA: THÊM CỘT CHUẨN HÓA ---
+                # string_columns = data_df.select_dtypes(include=['object']).columns
+                # standardized_cols_map = {}  # Lưu map từ cột gốc -> cột chuẩn hóa
+                # print("Step 2: Standardizing text columns...")
+                # print(f"String columns found: {list(string_columns)}")
+                #
+                # for col_name in string_columns:
+                #     new_col_name = f"{col_name}_chuanhoa"
+                #     data_df[new_col_name] = data_df[col_name].astype(str).apply(standardize_text)
+                #     standardized_cols_map[col_name] = new_col_name
+                #
+                # print(f"Standardized columns added: {list(standardized_cols_map.values())}")
+                # # Cập nhật lại DataFrame trong dictionary
+                # all_sheets_dfs[data_sheet_name] = data_df
+                #
+                # # --- 3. XỬ LÝ SHEET MASTER: CẬP NHẬT MIÊU TẢ ---
+                # if master_sheet_name and master_sheet_name in all_sheets_dfs:
+                #     master_df = all_sheets_dfs[master_sheet_name]
+                #     if not master_df.empty:
+                #         master_col_name = master_df.columns[0]
+                #         original_descriptions = parse_master_sheet(master_df, list(string_columns))
+                #         print(f"Original descriptions extracted: {list(original_descriptions.keys())}")
+                #
+                #         new_master_content = []
+                #         for line in master_df[master_col_name].dropna().astype(str):
+                #             new_master_content.append(line)
+                #             col_original = line.split(":")[0]
+                #             if col_original in standardized_cols_map:
+                #                 new_col_name = standardized_cols_map[col_original]
+                #                 original_desc = original_descriptions.get(col_original, "Không có miêu tả gốc.")
+                #
+                #                 new_desc_lines = [
+                #                     new_col_name + f": Đây là cột dữ liệu được chuẩn hóa từ cột '{col_original}'." +
+                #                     "Dữ liệu đã được loại bỏ dấu, chuyển thành chữ thường và xóa khoảng trắng để phục vụ tìm kiếm." +
+                #                     original_desc
+                #                 ]
+                #                 new_master_content.extend(new_desc_lines)
+                #
+                #         updated_master_df = pd.DataFrame(new_master_content, columns=[master_col_name])
+                #         all_sheets_dfs[master_sheet_name] = updated_master_df
 
                 # --- 4. XỬ LÝ SHEET PERMISSION (NẾU CÓ) ---
                 permission_df = None
@@ -240,8 +240,8 @@ async def process_pdf_endpoint(chatbot_name: str,
                 # Sử dụng mode='w' để ghi đè file với nội dung mới từ dictionary all_sheets_dfs
                 with pd.ExcelWriter(destination_path, engine='openpyxl', mode='w') as writer:
                     # Ghi lại tất cả các sheet đã được sửa đổi (data, master) và các sheet không đổi
-                    for sheet_name, df_to_write in all_sheets_dfs.items():
-                        df_to_write.to_excel(writer, sheet_name=sheet_name, index=False)
+                    # for sheet_name, df_to_write in all_sheets_dfs.items():
+                    #     df_to_write.to_excel(writer, sheet_name=sheet_name, index=False)
 
                     # Ghi thêm sheet 'permission' nếu nó đã được tạo
                     if permission_df is not None:
