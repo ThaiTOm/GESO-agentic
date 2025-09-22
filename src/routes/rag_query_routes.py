@@ -6,7 +6,7 @@ from rag_components.llm_interface import reformulate_query_with_chain
 from routes.rag_routes import get_typesense_client
 from typing_class.rag_type import *
 from rag_components.chatbot_manager import *
-from processing.analysis_processor import select_excel_database
+from processing.analysis_processor import select_excel_database, select_database
 from rag_components.agents.data_analyst_agent import analyze_dataframe
 from llm.llm_langchain import gemini_llm_service, local_llm_service
 
@@ -19,27 +19,19 @@ router = APIRouter()
 @router.post("/query_rag")
 async def query_analyze_rag_document(request: QueryRequest, api_key: str = Header(...), typesense_client: Any = Depends(get_typesense_client)):
     collection_name = get_chatbot_name_by_api_key(typesense_client, api_key)
-
-    # reformulated_query = await reformulate_query_with_chain(
-    #     query=request.query,
-    #     chat_history=request.chat_history
-    # )
-
-    excel_database, master_sheet, row_rules, selected_db, db_description = await select_excel_database(
+    database, master_sheet, row_rules, selected_db, db_description = await select_database(
         request.query, collection_name)
 
-    if excel_database is None:
+    if database is None:
         return {
             "answer": "Không có câu trả lời"
         }
 
+    result_analyze = analyze_dataframe(df=database, query=request.query, master_data=master_sheet, row_rules=row_rules, user_id=request.user_id, user_role=request.user_role)
 
-    result_analyze = analyze_dataframe(df=excel_database, query=request.query, master_data=master_sheet, row_rules=row_rules, user_id=request.user_id, user_role=request.user_role)
     answer = result_analyze.get("result", None)
     reason = result_analyze.get("reason", None)
 
-
-    # Pretty the answer
     prompt = ChatPromptTemplate.from_template("""
     Bạn là một trợ lý chuyên về định dạng văn bản. Nhiệm vụ của bạn là trình bày lại câu trả lời dưới đây một cách chuyên nghiệp và dễ đọc, lịch sự, và hãy nói sơ qua về lý do bạn làm như vậy (nói đơn giản dễ hiểu, không đề cập đến kỹ thuật như dataframe, cột, dòng, etc).
 

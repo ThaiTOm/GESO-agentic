@@ -6,7 +6,7 @@ import pandas as pd
 from unidecode import unidecode
 
 
-def standardize_text_upgraded(
+def standardize_text(
         text: Any,
         to_lowercase: bool = True,
         remove_accents: bool = True,
@@ -14,7 +14,7 @@ def standardize_text_upgraded(
         remove_all_space: bool = True
 ) -> str:
     """
-    Chuẩn hóa một chuỗi văn bản với nhiều tùy chọn linh hoạt.
+    Chuẩn hóa một chuỗi văn bản với nhiều tùy chọn linh hoạt và độ tin cậy cao.
 
     Quy trình mặc định:
     1. Xử lý giá trị đầu vào không phải chuỗi (None, NaN, int,...) -> trả về chuỗi rỗng.
@@ -36,12 +36,19 @@ def standardize_text_upgraded(
 
     Returns:
         str: Chuỗi văn bản đã được chuẩn hóa.
+
+    Example:
+        >>> raw = "  Hộ Kinh Doanh - Nhà Thuốc QUỲNH ANH (2024)  "
+        >>> standardize_text(raw)
+        'hokinhdoanhnhathuocquynhanh2024'
+        >>> standardize_text(raw, remove_all_space=False)
+        'ho kinh doanh nha thuoc quynh anh 2024'
+        >>> standardize_text("Some-Text", to_lowercase=False, remove_all_space=False)
+        'Some Text'
     """
     # 1. Handle non-string, None, or NaN inputs robustly
-    if text is None:
-        return ""
-    # Check for NaN values (e.g., from numpy or pandas)
-    if isinstance(text, float) and math.isnan(text):
+    # This check is crucial because np.nan, pd.NA, etc., are not None but behave similarly.
+    if text is None or (isinstance(text, float) and math.isnan(text)):
         return ""
 
     processed_text = str(text)
@@ -54,12 +61,16 @@ def standardize_text_upgraded(
     if to_lowercase:
         processed_text = processed_text.lower()
 
-    # 4. Remove punctuation and special characters (e.g., "sua-me 100%" -> "sua me 100")
-    # This regex keeps letters, numbers, and whitespace.
+    # 4. Remove punctuation and special characters
+    # UPGRADE: The regex is changed from `[^a-z0-9\s]` to `[^a-zA-Z0-9\s]`.
+    # This is a critical fix to prevent it from removing uppercase letters
+    # when `to_lowercase` is set to False.
     if remove_punctuation:
-        processed_text = re.sub(r'[^a-z0-9\s]', '', processed_text)
+        processed_text = re.sub(r'[^a-zA-Z0-9\s]', '', processed_text)
 
     # 5. Handle whitespace based on the flag
+    # The regex `\s+` correctly handles all kinds of whitespace (spaces, tabs, newlines)
+    # which was the source of the "invisible character" problem.
     if remove_all_space:
         # Remove all whitespace characters (e.g., "sua me 100" -> "suame100")
         processed_text = re.sub(r'\s+', '', processed_text)

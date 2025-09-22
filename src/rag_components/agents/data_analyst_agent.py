@@ -104,13 +104,14 @@ class DataAnalystAgent:
         "--- CURRENT TASK ---\n"
         f"Today's date is {time.strftime('%d/%m/%Y')}.\n"
         "Here is the context for the current DataFrame:\n"
-        "####\n"
+        "{master_data_context}"  # Use a named placeholder
+        "####\n" 
         "- Column Data Types (df.dtypes):\n"
         "{df_dtypes}\n\n"
-        "- Column Value Examples:\n"
-        "{column_examples}\n\n"
-        "- First 5 Rows (df.head()):\n"
-        "{df_head_csv}\n\n"
+        # "- Column Value Examples:\n"
+        # "{column_examples}\n\n"
+        # "- First 5 Rows (df.head()):\n"
+        # "{df_head_csv}\n\n"
         "User's question: {query}"
     )
 
@@ -140,21 +141,29 @@ class DataAnalystAgent:
             )
         return "\n\n".join(formatted_list)
 
-    def build_prompt(self, query: str, df: pd.DataFrame):
+    def build_prompt(self, query: str, df: pd.DataFrame, master_data: str):
         column_examples = {}
         for col in df.columns:
             column_examples[col] = df[col].dropna().unique()[:10].tolist()
 
         # --- 4. Format the examples and insert them into the prompt ---
         formatted_examples = self._format_examples()
+        master_data_context = f"\n\n--- MASTER DATA --- \n**Master Data:** {master_data} \n\n"
 
-        prompt = self.default_instruction.replace(
+        prompt_template = self.default_instruction
+
+        prompt = prompt_template.replace(
             "{examples}", formatted_examples
+        ).replace(
+            "{master_data_context}", master_data_context
+        ).replace(
+            "####", ""  # Let's remove the old placeholder now that we have a better one
         ).replace(
             "{df_dtypes}", df.dtypes.to_markdown()
         ).replace(
             "{query}", query
         )
+
         print("=============== The prompt after build ")
         print(prompt)
         return prompt
@@ -231,6 +240,7 @@ def analyze_dataframe(query: str, df: pd.DataFrame, master_data: str, row_rules:
         print("The user id is ", user_id )
         row_rules = row_rules.get('rowRules', {})
         roles = row_rules.keys()
+        print("The row rules are ", row_rules)
         if user_id != 'duythai':
             for role in roles:
                 print("The role of current is ", role)
@@ -244,18 +254,12 @@ def analyze_dataframe(query: str, df: pd.DataFrame, master_data: str, row_rules:
 
         # init class DataAnalystAgent
         # Chèn Master Data vào vị trí '####'
-        modified_instruction = DataAnalystAgent.default_instruction.replace(
-            "####",
-            f"\n\n--- MASTER DATA --- \n**Master Data:** {master_data} \n\n"
-        )
-
-        # Sau đó gán lại cho class
-        DataAnalystAgent.default_instruction = modified_instruction
-
+        print("The master data is ", master_data)
         # Sau đó mới tiến hành transform DataFrame
         df = DataAnalystAgent.transform_df(df)  # Use cached transformation
         print("DataFrame after transformation:\n", df.head())
     except Exception as e:
+        print(e)
         return {"result": None, "code": "", "error": f"❌ Tiền xử lý DataFrame thất bại: {e}"}
 
     # ===== Environment Setup =====
@@ -273,7 +277,7 @@ def analyze_dataframe(query: str, df: pd.DataFrame, master_data: str, row_rules:
         parser = PydanticOutputParser(pydantic_object=CodeOutput)
 
         # 2. Build the initial prompt
-        base_prompt = analyst.build_prompt(query=query, df=df)
+        base_prompt = analyst.build_prompt(query=query, df=df, master_data=master_data)
 
         # 3. Get the formatting instructions from the parser and add them to the prompt
         #    This is how we tell the model to generate JSON.
@@ -296,6 +300,21 @@ def analyze_dataframe(query: str, df: pd.DataFrame, master_data: str, row_rules:
 
 
         code = textwrap.dedent(code).strip()
+
+        # Your original search terms
+        # search_customer = standardize_text('HỘ KINH DOANH NHÀ THUỐC QUỲNH ANH')
+        # search_scheme = standardize_text('9.CT Cam Ranh')
+
+        # --- DEBUGGING ---
+
+        # 1. Create a mask ONLY for the customer
+        # mask_customer = df['TENKH'].astype(str).apply(standardize_text) == search_customer
+        # print(f"Matches for customer '{search_customer}': {mask_customer.sum()}")
+        #
+        # # 2. Create a mask ONLY for the scheme
+        # mask_scheme = df['SCHEME'].astype(str).apply(standardize_text) == search_scheme
+        # print(f"Matches for scheme '{search_scheme}': {mask_scheme.sum()}")
+
         print(f"AI Reasoning: {reasoning}")
         print("Extracted code:\n", code)
 

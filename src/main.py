@@ -6,7 +6,7 @@ from typing_class.graph_type import OrchestratorRequest, OrchestratorResponse
 from graph.main_graph import build_graph
 from config import settings
 import os
-
+from database.sql_connection import load_and_cache_database_server
 
 # --- FastAPI Application Setup ---
 
@@ -31,6 +31,8 @@ app.add_middleware(LoggingMiddleware)
 # Compile the LangGraph application once at startup.
 # This is efficient as the graph structure doesn't change.
 langgraph_app = build_graph()
+
+load_and_cache_database_server("OPC", "FACTDOANHTHU")
 
 # --- API Endpoint Definition ---
 

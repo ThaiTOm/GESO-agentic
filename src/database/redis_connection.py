@@ -1,3 +1,6 @@
+import json
+
+import numpy as np
 import redis
 import pandas as pd
 import pyarrow as pa
@@ -95,3 +98,36 @@ def get_dataframe_with_cache(file_path: str) -> pd.DataFrame:
         print(f"Redis connection error: {e}. Falling back to direct file read.")
         df = pd.read_excel(file_path)
         return df
+
+class CustomEncoder(json.JSONEncoder):
+    """
+    Custom JSON encoder to handle special types from pandas and numpy,
+    such as Timestamps, numpy numbers, and NaN values.
+    """
+    def default(self, obj):
+        if isinstance(obj, pd.Timestamp):
+            # Convert pandas Timestamp to an ISO 8601 formatted string
+            return obj.isoformat()
+        if isinstance(obj, np.integer):
+            # Convert numpy integer to a standard Python int
+            return int(obj)
+        if isinstance(obj, np.floating):
+            # Convert numpy float to a standard Python float.
+            # Crucially, check if it's NaN and convert to None (which becomes null in JSON).
+            return None if np.isnan(obj) else float(obj)
+        if isinstance(obj, np.ndarray):
+            # Convert numpy arrays to lists
+            return obj.tolist()
+        # Let the base class default method raise the TypeError for other types
+        return super(CustomEncoder, self).default(obj)
+
+
+def add_data_to_redis(key: str, value: str):
+    """
+    Adds a simple key-value pair to Redis.
+    """
+    try:
+        r.set(key, value)
+        print(f"Added key '{key}' with value '{value}' to Redis.")
+    except redis.exceptions.ConnectionError as e:
+        print(f"Redis connection error: {e}. Could not add key-value pair.")
