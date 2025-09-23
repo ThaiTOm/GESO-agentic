@@ -97,7 +97,7 @@ def _read_excel_file_data(file_path: str) -> Tuple[
     return data_df, master_df, permission_data, description, error_message
 
 
-def get_excel_data_with_cache(file_path: str) -> Tuple[
+def get_excel_data_with_cache(file_path: str, cache_path: str) -> Tuple[
     Optional[pd.DataFrame], Optional[pd.DataFrame], Dict[str, Any], str, Optional[str]]:
     """
     A caching wrapper around _read_excel_file_data.
@@ -105,9 +105,11 @@ def get_excel_data_with_cache(file_path: str) -> Tuple[
     """
     try:
         # flush_redis_database()
-        cached_result_bytes = r.get(file_path)
+        cached_result_bytes = r.get(cache_path)
 
         if cached_result_bytes:
+            print("-" * 100)
+            print("We have cached data for", cache_path)
             logging.info(f"CACHE HIT for '{os.path.basename(file_path)}'")
             # Deserialize the entire tuple from bytes using pickle.loads
             return pickle.loads(cached_result_bytes)
@@ -117,11 +119,10 @@ def get_excel_data_with_cache(file_path: str) -> Tuple[
             _, _, _, _, error_message = result_tuple
 
             if error_message is None:
-                logging.info(f"Storing '{os.path.basename(file_path)}' in Redis cache.")
+                logging.info(f"Storing '{os.path.basename(cache_path)}' in Redis cache.")
                 # Serialize the entire tuple into bytes using pickle.dumps
                 serialized_result = pickle.dumps(result_tuple)
-
-                r.set(file_path, serialized_result, ex=864000)
+                r.set(cache_path, serialized_result, ex=864000)
 
             return result_tuple
 
@@ -172,7 +173,11 @@ async def select_database(query:str, collection: str) -> tuple | None:
     if _type == "xlsx":
         return select_excel_database(_name_data, collection, _selected_metadata)
     else:
-        key = f"db_cache:{_collection_name}_{_type}_{_name_data}"
+        key = settings.DATAFRAME_CACHE_DEFINE.format(
+            collection=_collection_name,
+            type=_type,
+            full_path=_name_data
+        )
         print("Selecting server database with key:", key)
         print("Selected metadata:", _selected_metadata)
         return select_server_database(key, _selected_metadata, None, selected_db_name, _selected_metadata)
@@ -200,7 +205,12 @@ def select_excel_database(selected_db_name: str, collection: str, descriptions: 
 
     logger.info(f"Attempting to load data for: {os.path.basename(selected_path)}")
     print(f"Attempting to load data for: {os.path.basename(selected_path)}")
-    data_df, master_sheet, permission, description, error = get_excel_data_with_cache(selected_path)
+    cache_path = settings.DATAFRAME_CACHE_DEFINE.format(
+        collection=collection,
+        type="xlsx",
+        full_path=os.path.splitext(os.path.basename(selected_path))[0]
+    )
+    data_df, master_sheet, permission, description, error = get_excel_data_with_cache(file_path=selected_path, cache_path=cache_path)
     print("We have data: ")
     print(data_df.iloc[:5])
     if error:

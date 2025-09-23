@@ -81,6 +81,30 @@ class DataAnalystAgent:
                 result = df[mask]
                 """
             ))
+        },
+        {
+            "query": "Tổng doanh thu phát sinh từ khách hàng HỘ KINH DOANH NHÀ THUỐC QUỲNH ANH trong Chương trình KHTT_Sỉ của nhân viên HOÀNG NGỌC HOÀN là bao nhiêu?",
+            "output": CodeOutput(
+                reasoning="""Để tính tổng doanh thu từ khách hàng 'HỘ KINH DOANH NHÀ THUỐC QUỲNH ANH' trong 'Chương trình KHTT_Sỉ' của nhân viên 'HOÀNG NGỌC HOÀN', tôi sẽ chuẩn hóa các cột liên quan và giá trị tìm kiếm để đảm bảo so sánh chính xác, bất chấp sự khác biệt về chữ hoa/thường và dấu câu.""",
+                code=textwrap.dedent("""
+                # Chuẩn hóa các giá trị tìm kiếm
+                search_customer = standardize_text('HỘ KINH DOANH NHÀ THUỐC QUỲNH ANH')
+                search_scheme = standardize_text('Chương trình KHTT_Sỉ')
+                search_employee = standardize_text('HOÀNG NGỌC HOÀN')
+            
+                # Tạo các mặt nạ (mask) cho từng điều kiện
+                mask_customer = df['TENKH'].astype(str).apply(standardize_text) == search_customer
+                mask_scheme = df['SCHEME'].astype(str).apply(standardize_text) == search_scheme
+                mask_employee = df['NhanVien'].astype(str).apply(standardize_text) == search_employee
+            
+                # Kết hợp các mặt nạ để lọc DataFrame
+                combined_mask = mask_customer & mask_scheme & mask_employee
+                filtered_df = df[combined_mask]
+            
+                # Tính tổng doanh thu từ DataFrame đã lọc
+                result = filtered_df['DoanhThu'].sum()
+                """
+            ))
         }
     ]
 

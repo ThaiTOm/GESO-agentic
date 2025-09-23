@@ -105,7 +105,7 @@ def stream_synced_data(engine, table_name, id_column, batch_size=100000, update_
                     # 1. READ OPERATION: Select the NEXT available batch of unsynced rows.
                     query = (
                         f"SELECT TOP ({batch_size}) * FROM {table_name} "
-                        f"WHERE is_syn_pt = 1 "
+                        f"WHERE is_syn_pt = 0 "
                         f"ORDER BY {id_column}"
                     )
 
@@ -139,7 +139,7 @@ def stream_synced_data(engine, table_name, id_column, batch_size=100000, update_
                             # Construct the SQL query by directly embedding the IDs.
                             # This is safe here because we know the IDs are just numbers from our own query.
                             update_query_text = (
-                                f"UPDATE {table_name} SET is_syn_pt=0 "
+                                f"UPDATE {table_name} SET is_syn_pt=1 "
                                 f"WHERE {id_column} IN ({in_clause_values})"
                             )
 
@@ -183,19 +183,29 @@ def load_or_query_parquet(table_name, loader_func):
 
 
 def sql_query_builder(collection_name, table_name, data):
-    key = f"{collection_name}_db_{table_name}"
-    redis_key = f"db_cache:{key}"
+    redis_key = settings.DATAFRAME_CACHE_DEFINE.format(
+        collection=collection_name,
+        full_path=table_name,
+        type="db"
+    )
     cached_result_bytes = r.get(redis_key)
-
     if not cached_result_bytes:
-        serialized_result = pickle.dumps(data)
-        r.set(redis_key, serialized_result, ex=864000)
-        r.rpush(settings.LIST_MASTER_DATA_DESCRIPTION, f"{key}_{FACT_DOANH_THU_DESCRIPTION}")
+        master_description = settings.MASTER_DESCRIPTION_DEFINE.format(
+            type="db",
+            collection=collection_name,
+            full_path=table_name,
+            description=FACT_DOANH_THU_DESCRIPTION
+        )
+        r.rpush(settings.LIST_MASTER_DATA_DESCRIPTION, master_description)
+        r.set(redis_key, pickle.dumps(data), ex=settings.REDIS_EXPIRE_TIME)
 
 
 def load_and_cache_database_server(collection_name, table_name) -> str:
-    key = f"{collection_name}_db_{table_name}"
-    redis_key = f"db_cache:{key}"
+    redis_key = settings.DATAFRAME_CACHE_DEFINE.format(
+        collection=collection_name,
+        full_path=table_name,
+        type="db"
+    )
     cached_result_bytes = r.get(redis_key)
 
     if cached_result_bytes:
@@ -222,7 +232,6 @@ def load_and_cache_database_server(collection_name, table_name) -> str:
     if all_dfs:
         print("Concatenating all chunks...")
         final_df = pd.concat(all_dfs, ignore_index=True)
-
         print(f"Saving DataFrame with {len(final_df)} rows to Excel file...")
         excel_start_time = time.time()
         output_filename = 'synced_data_output.xlsx'

@@ -33,8 +33,6 @@ def get_typesense_client():
         raise HTTPException(status_code=503, detail="TypesenseClient not initialized")
     return client
 
-print("Current master data descriptions in Redis:")
-print(r.lrange(settings.LIST_MASTER_DATA_DESCRIPTION, 0, -1))
 
 # ===================================================
 # [Group 1] Chatbot management endpoints
@@ -173,7 +171,13 @@ async def process_pdf_endpoint(chatbot_name: str,
                 master_df = pd.read_excel(destination_path, sheet_name="master")
                 if not master_df.empty:
                     description = "\n".join(master_df.iloc[:, 0].astype(str).tolist())
-                    r.rpush(settings.LIST_MASTER_DATA_DESCRIPTION, chatbot_name +  "_xlsx" + f"_{destination_path}_" + description)
+                    name_master_description = settings.MASTER_DESCRIPTION_DEFINE.format(
+                        collection=chatbot_name,
+                        type="xlsx",
+                        full_path=destination_path,
+                        description=description
+                    )
+                    r.rpush(settings.LIST_MASTER_DATA_DESCRIPTION, name_master_description)
 
                 permission_df = None
                 if permissions_str:
@@ -258,8 +262,26 @@ async def get_chatbot_info(request: ChatbotInfoRequest, typesense_client: Any = 
 @router.delete("/typesense/document/delete/{chatbotName}/{documentTitle}")
 async def delete_excel_document(chatbotName:str, documentTitle:str):
     """Xóa file excel đã upload"""
-    # flush_redis_database()
+    master_descriptions_list = r.lrange(settings.LIST_MASTER_DATA_DESCRIPTION, 0, -1)
+    master_del = settings.MASTER_DESCRIPTION_DEFINE.format(
+        collection=chatbotName,
+        type="xlsx",
+        full_path=documentTitle,
+        description="_{description}"
+    )
+
+    master_del.replace("_{description}", "")
+    print("The key to delete:", master_del)
+
+    idx = master_descriptions_list.index(master_del) if master_del in master_descriptions_list else -1
     try:
+
+        marker = "__TO_DELETE__"
+        # Set marker
+        r.lset(settings.LIST_MASTER_DATA_DESCRIPTION, idx, marker)
+
+        # Remove marker
+        r.lrem(settings.LIST_MASTER_DATA_DESCRIPTION, 1, marker)
         file_path = os.path.join(settings.UPLOAD_DIR, chatbotName, documentTitle)
         if os.path.exists(file_path):
             os.remove(file_path)
