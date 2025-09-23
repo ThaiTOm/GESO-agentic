@@ -201,7 +201,7 @@ async def tool_router_node(state: OrchestratorState) -> dict:
     return {"tool_to_use": tool_name, "tool_input": tool_input}
 
 
-async def api_caller_node(state: OrchestratorState) -> dict:
+async def api_caller_node(state: OrchestratorState, config: RunnableConfig) -> dict:
     """
     Node 3: The worker. Executes the API call to the selected backend service.
     """
@@ -212,12 +212,12 @@ async def api_caller_node(state: OrchestratorState) -> dict:
     response = {}
     ### MODIFIED: Added the `elif` block for the new tool ###
     if tool_to_use == "rag":
-        response = await call_rag_api(tool_input, api_key=state["api_key"])
+        response = await call_rag_api(tool_input, api_key=state["api_key"], config=config)
     elif tool_to_use == "retrieval_from_database":
-        response = await call_database_retrieval_api(tool_input, api_key=state["api_key"])
+        response = await call_database_retrieval_api(tool_input, api_key=state["api_key"], config=config)
     elif tool_to_use == "analysis":
         response = await call_analysis_api(aggregation_level=tool_input.get("aggregation_level", "quarterly"),
-                                           query=state['query'])
+                                           query=state['query'], config=config)
 
 
     # if tool_to_use != "analysis":

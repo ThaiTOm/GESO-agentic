@@ -1,3 +1,4 @@
+# -- routes/main_routes.py --
 import os
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
@@ -5,6 +6,28 @@ from fastapi.staticfiles import StaticFiles
 from utils.logging_config import *
 from routes import rag_routes, analysis_routes, rag_query_routes
 from database.typesense_declare import get_typesense_instance_service
+
+
+from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
+from starlette.requests import Request
+from starlette.responses import Response
+# THIS IS THE CORRECT, VERIFIED IMPORT for the context manager
+from langsmith.run_helpers import tracing_context
+
+
+class LangSmithContextMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
+        # Read the custom header sent by the orchestrator
+        parent_run_id_header = request.headers.get("X-LangSmith-Parent-Run-Id")
+
+        # Use the `tracing_context` context manager. Any LangChain/LangSmith
+        # traces created within this block will automatically be linked
+        # to the parent run ID we provide from the header.
+        # The SDK handles validation of the header value.
+        with tracing_context(parent_run_id=parent_run_id_header):
+            response = await call_next(request)
+
+        return response
 
 # Initialize Typesense
 get_typesense_instance_service()
@@ -14,6 +37,8 @@ app = FastAPI(
     description="API for RAG system and Business Performance Trend Analysis",
     version="1.0.0"
 )
+
+app.add_middleware(LangSmithContextMiddleware)
 
 # Add CORS middleware
 app.add_middleware(
