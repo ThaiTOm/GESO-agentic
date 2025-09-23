@@ -18,7 +18,6 @@ from types import SimpleNamespace
 
 # Your custom, model-agnostic LLM caller
 from llm.llm_langchain import gemini_llm_service, local_llm_service
-llm = gemini_llm_service
 
 class RelevantPlotsDecision(BaseModel):
     """Defines the output for the plot filtering decision."""
@@ -162,15 +161,12 @@ async def tool_router_node(state: OrchestratorState) -> dict:
         reformulated_query = "Tìm nội dung trong retrieval_from_database, " + reformulated_query
 
     parser = PydanticOutputParser(pydantic_object=ToolRouterDecision)
-    router_chain = CHOOSE_TOOL_PROMPT | llm | parser
+    router_chain = CHOOSE_TOOL_PROMPT | gemini_llm_service | parser
 
     decision = await router_chain.ainvoke({
         "query": reformulated_query,
         "format_instructions": parser.get_format_instructions()
     })
-
-    # TODO: decision need to be rethingking again, because we need to be choose between RAG and DB retrieval
-
 
     if not decision:
         return {"tool_to_use": "none", "tool_input": {}}
@@ -260,7 +256,7 @@ async def summarize_and_filter_analysis_node(state: OrchestratorState) -> dict:
     if technical_summary:
         summarizer_chain = (
                 TECHNICAL_REPORT_SUMMARY_PROMPT
-                | llm.bind(max_output_tokens=512)  # Pass parameters here!
+                | local_llm_service.bind(max_output_tokens=512)  # Pass parameters here!
                 | StrOutputParser()
         )
 
@@ -280,7 +276,7 @@ async def summarize_and_filter_analysis_node(state: OrchestratorState) -> dict:
         available_segments = list(original_plots.keys())
 
         plot_parser = PydanticOutputParser(pydantic_object=RelevantPlotsDecision)
-        plot_filter_chain = FILTER_GRAPH_TITLE_PROMPT | llm | plot_parser
+        plot_filter_chain = FILTER_GRAPH_TITLE_PROMPT | local_llm_service | plot_parser
 
         # 4. Invoke the chain, passing the format instructions from the parser.
         decision = await plot_filter_chain.ainvoke({
@@ -314,7 +310,6 @@ def should_summarize_analysis(state: OrchestratorState) -> Literal["summarize", 
     analysis tool was the one that just ran.
     """
     print("--- EDGE: Checking if summarization is needed ---")
-    # TODO
 
     if state.get("tool_to_use") == "analysis":
         print("--- DECISION: Route to summarizer ---")

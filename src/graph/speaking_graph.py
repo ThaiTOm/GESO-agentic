@@ -1,7 +1,7 @@
 # ielts_graph_builder.py
 
 import random
-from typing import List, Literal, Optional, Dict, Any, Union  # Ensure Union is imported for type hints
+from typing import List, Literal, Optional, Dict
 from langchain_core.output_parsers import StrOutputParser, PydanticOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from pydantic import BaseModel, Field
