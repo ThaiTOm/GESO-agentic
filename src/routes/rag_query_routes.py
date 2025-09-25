@@ -9,7 +9,7 @@ from rag_components.chatbot_manager import *
 from processing.analysis_processor import select_excel_database, select_database
 from rag_components.agents.data_analyst_agent import analyze_dataframe
 from llm.llm_langchain import gemini_llm_service, local_llm_service
-
+from context_engine.reformulation_prompt import reformulation_query_prompt, not_known_prompt
 
 # Initialize logger
 logger = logging.getLogger(__name__)
@@ -24,31 +24,22 @@ async def query_analyze_rag_document(request: QueryRequest, api_key: str = Heade
 
     if database is None:
         return {
-            "answer": "Không có câu trả lời"
+            "answer": not_known_prompt
         }
 
-    result_analyze = analyze_dataframe(df=database, query=request.query, master_data=master_sheet, row_rules=row_rules, user_id=request.user_id, user_role=request.user_role)
+    result_analyze = analyze_dataframe(df=database,
+                                       query=request.query,
+                                       master_data=master_sheet,
+                                       row_rules=row_rules,
+                                       user_id=request.user_id,
+                                       user_role=request.user_role,
+                                       selected_db=selected_db
+                                       )
 
     answer = result_analyze.get("result", None)
     reason = result_analyze.get("reason", None)
 
-    prompt = ChatPromptTemplate.from_template("""
-    Bạn là một trợ lý chuyên về định dạng văn bản. Nhiệm vụ của bạn là trình bày lại câu trả lời dưới đây một cách chuyên nghiệp và dễ đọc, lịch sự, và hãy nói sơ qua về lý do bạn làm như vậy (nói đơn giản dễ hiểu, không đề cập đến kỹ thuật như dataframe, cột, dòng, etc).
-
-    **Yêu cầu định dạng:**
-    - **In đậm:** Sử dụng in đậm cho các tiêu đề chính hoặc các thuật ngữ quan trọng.
-    - **Danh sách:** Sử dụng gạch đầu dòng (-) hoặc danh sách có thứ tự (1., 2.) để liệt kê các ý.
-    - **Viết hoa:** Luôn viết hoa tên riêng, tên người, tên sản phẩm, và các danh từ riêng quan trọng.
-    - **Cấu trúc:** Phân chia nội dung thành các đoạn văn ngắn, có tiêu đề rõ ràng nếu cần.
-    - **Lưu ý:** Tuyệt đối không sử dụng định dạng bảng, chỉ trả lời dựa trên câu trả lời từ người dùng, không được thêm kiến thức khác.
-
-    **Đây là câu trả lời hãy chỉ cho ra kết quả cuối cùng, không kèm thêm gì**
-     - **Câu trả lời:** "{answer}"
-     - **Câu hỏi của người dùng:** "{query}"
-     - **Lý do phân tích:** "{reason}"
-     - **Tổng quan dữ liệu và các cột có trong dữ liệu:** "{db_description}"
-    """)
-
+    prompt = ChatPromptTemplate.from_template(reformulation_query_prompt)
     summarizer_chain = (
             prompt
             | local_llm_service.bind(max_output_tokens=512)  # Pass parameters here!
@@ -60,11 +51,11 @@ async def query_analyze_rag_document(request: QueryRequest, api_key: str = Heade
         "answer": answer,
         "query": request.query,
         "reason": reason,
-        "db_description": db_description[:400]
+        "db_description": db_description[100:]
     })
 
     if answer is None:
-        answer_fn = f"Rất tiếc, tôi chưa có thông tin về vấn đề này. Vui lòng liên hệ bộ phận hỗ trợ phù hợp để được giải đáp."
+        answer_fn = not_known_prompt
 
     print(answer_fn)
 

@@ -16,6 +16,8 @@ import re
 from utils.helper import standardize_text
 
 from pydantic import BaseModel, Field
+from utils.helper_authorization import authorize
+
 
 class CodeOutput(BaseModel):
     """A Pydantic model to structure the output for the data analyst agent."""
@@ -45,30 +47,24 @@ class DataAnalystAgent:
         {
             "query": "cho biết số cửa hiệu mà Đặng Thị Hồng đang quản lý?",
             "output": CodeOutput(
-                reasoning="""Để tìm số cửa hiệu của 'Đặng Thị Hồng', tôi sẽ chuẩn hóa cột 'DaiDienKinhDoanh' và chuỗi tìm kiếm (bỏ dấu, chuyển thành chữ thường) rồi mới so sánh. Điều này đảm bảo kết quả chính xác dù người dùng gõ 'đặng thị hồng' hay 'DANG THI HONG'.""",
+                reasoning="""Áp dụng Nguyên tắc #1 (Chuẩn hóa) và #2.A (So sánh Chính xác), tôi sẽ chuẩn hóa cột 'DaiDienKinhDoanh' và chuỗi tìm kiếm đầy đủ để so sánh bằng (==).""",
                 code=textwrap.dedent("""
-                # Chuẩn hóa giá trị tìm kiếm
-                search_value = standardize_text('Đặng Thị Hồng')
-            
-                # Chuẩn hóa cột trong DataFrame và so sánh
-                mask = df['DaiDienKinhDoanh'].astype(str).apply(standardize_text) == search_value
-                result = df.loc[mask, 'CuaHieuQuanLy'].sum()
-                """)
+                        search_value = standardize_text('Đặng Thị Hồng')
+                        mask = df['DaiDienKinhDoanh'].astype(str).apply(standardize_text) == search_value
+                        result = df.loc[mask, 'CuaHieuQuanLy'].sum()
+                        """)
             )
         },
         {
             "query": "tìm các sản phẩm có chữ 'baby gold'",
             "output": CodeOutput(
-                reasoning="""Để tìm các sản phẩm chứa 'baby gold', tôi sẽ chuẩn hóa cột 'TenSanPham' và chuỗi tìm kiếm. Sau đó, tôi dùng phương thức .str.contains() để tìm kiếm một phần chuỗi.""",
+                reasoning="""Áp dụng Nguyên tắc #1 (Chuẩn hóa) và #2.B (So sánh Tương đối), tôi sẽ chuẩn hóa cột 'TenSanPham' và dùng .str.contains() để tìm kiếm một phần chuỗi.""",
                 code=textwrap.dedent("""
-                # Chuẩn hóa chuỗi người dùng nhập
-                search_term = standardize_text('baby gold')
-            
-                # Chuẩn hóa cột 'TenSanPham' và tìm kiếm
-                mask = df['TenSanPham'].astype(str).apply(standardize_text).str.contains(search_term, na=False)
-                result = df[mask]
-                """
-            ))
+                        search_term = standardize_text('baby gold')
+                        mask = df['TenSanPham'].astype(str).apply(standardize_text).str.contains(search_term, na=False)
+                        result = df[mask]
+                        """
+                ))
         },
         {
             "query": "Liệt kê các đơn hàng của kho 'hcm_bd'",
@@ -76,35 +72,40 @@ class DataAnalystAgent:
                 reasoning="""Để liệt kê đơn hàng của kho 'hcm_bd', tôi cần chuẩn hóa cả hai vế để so sánh chính xác, loại bỏ ảnh hưởng của chữ hoa/thường và khoảng trắng.""",
                 code=textwrap.dedent("""
                 # Trong trường hợp này, mã kho không có dấu, chỉ cần lower() và strip() là đủ
-                search_value = 'hcm_bd'.lower().strip()
-                mask = df['MaKho'].str.lower().str.strip() == search_value
+                search_value = standardize_text('hcm_bd')
+                mask = df['MaKho'].astype(str).apply(standardize_text) == search_value
                 result = df[mask]
                 """
             ))
         },
         {
-            "query": "Tổng doanh thu phát sinh từ khách hàng HỘ KINH DOANH NHÀ THUỐC QUỲNH ANH trong Chương trình KHTT_Sỉ của nhân viên HOÀNG NGỌC HOÀN là bao nhiêu?",
+            "query": "doanh thu của khách hàng tên 'thuoc quynh anh'",
             "output": CodeOutput(
-                reasoning="""Để tính tổng doanh thu từ khách hàng 'HỘ KINH DOANH NHÀ THUỐC QUỲNH ANH' trong 'Chương trình KHTT_Sỉ' của nhân viên 'HOÀNG NGỌC HOÀN', tôi sẽ chuẩn hóa các cột liên quan và giá trị tìm kiếm để đảm bảo so sánh chính xác, bất chấp sự khác biệt về chữ hoa/thường và dấu câu.""",
+                reasoning="""Vì người dùng cung cấp một phần tên ('thuoc quynh anh') chứ không phải tên đầy đủ, tôi sẽ áp dụng Nguyên tắc #2.B (So sánh Tương đối) và dùng .str.contains() để tìm tất cả khách hàng có tên chứa chuỗi này.""",
                 code=textwrap.dedent("""
-                # Chuẩn hóa các giá trị tìm kiếm
-                search_customer = standardize_text('HỘ KINH DOANH NHÀ THUỐC QUỲNH ANH')
-                search_scheme = standardize_text('Chương trình KHTT_Sỉ')
-                search_employee = standardize_text('HOÀNG NGỌC HOÀN')
-            
-                # Tạo các mặt nạ (mask) cho từng điều kiện
-                mask_customer = df['TENKH'].astype(str).apply(standardize_text) == search_customer
-                mask_scheme = df['SCHEME'].astype(str).apply(standardize_text) == search_scheme
-                mask_employee = df['NhanVien'].astype(str).apply(standardize_text) == search_employee
-            
-                # Kết hợp các mặt nạ để lọc DataFrame
-                combined_mask = mask_customer & mask_scheme & mask_employee
-                filtered_df = df[combined_mask]
-            
-                # Tính tổng doanh thu từ DataFrame đã lọc
-                result = filtered_df['DoanhThu'].sum()
-                """
-            ))
+                        # Chuẩn hóa cụm từ tìm kiếm
+                        search_term = standardize_text('thuoc quynh anh')
+
+                        # Chuẩn hóa cột TENKH và dùng .str.contains() để tìm kiếm tương đối
+                        mask = df['TENKH'].astype(str).apply(standardize_text).str.contains(search_term, na=False)
+
+                        # Lọc DataFrame và tính tổng doanh thu
+                        filtered_df = df[mask]
+                        result = filtered_df['DoanhThu'].sum()
+                """)
+            )
+        },
+        {
+            "query": "Tổng doanh thu của khách hàng HỘ KINH DOANH NHÀ THUỐC QUỲNH ANH",
+            "output": CodeOutput(
+                reasoning="""Vì người dùng cung cấp tên khách hàng đầy đủ và cụ thể, tôi sẽ áp dụng Nguyên tắc #2.A (So sánh Chính xác) và dùng toán tử '==' để có kết quả chính xác nhất.""",
+                code=textwrap.dedent("""
+                        search_customer = standardize_text('HỘ KINH DOANH NHÀ THUỐC QUỲNH ANH')
+                        mask_customer = df['TENKH'].astype(str).apply(standardize_text) == search_customer
+                        filtered_df = df[mask_customer]
+                        result = filtered_df['DoanhThu'].sum()
+                """)
+            )
         }
     ]
 
@@ -114,13 +115,15 @@ class DataAnalystAgent:
         "You must follow these guiding principles at all times.\n\n"
 
         "--- GUIDING PRINCIPLES ---\n"
-        "1.  **Robust Text Comparison (CRITICAL):** User queries often contain text that needs to be compared against DataFrame columns. Human text is inconsistent (e.g., 'Hà Nội' vs 'ha noi'). To handle this, YOU MUST ALWAYS apply a text standardization process for any text-based filtering, searching, or comparison.\n"
-        "    - **Action:** Before comparing, standardize BOTH the user's search term AND the relevant DataFrame column.\n"
-        "    - **Process:** Standardization means converting to lowercase, removing Vietnamese accents (diacritics), and stripping leading/trailing whitespace.\n"
+        "1.  **Standardize Text Before Comparison (Mandatory):** User text is inconsistent ('Hà Nội' vs 'ha noi'). To handle this, YOU MUST ALWAYS use the `standardize_text()` helper function on BOTH the user's search term AND the relevant DataFrame column before any comparison. This applies to all text filtering.\n\n"
 
-        "2.  **Use Provided Helper Functions:** To assist you, a pre-defined helper function `standardize_text(text)` is available in the execution environment. You should use it for all text normalization tasks as described in Principle #1. Do not redefine this function.\n"
+        "2.  **Select the Appropriate Comparison Method:** After standardizing, choose the correct comparison method based on the user's query.\n"
+        "    - **A. Use Exact Match (`==`):** Use this when the user provides a complete, specific identifier. This is best for codes (`MaKho`), categories, statuses, or when a full, precise name is given (e.g., 'HỘ KINH DOANH NHÀ THUỐC QUỲNH ANH').\n"
+        "    - **B. Use Partial Match (`.str.contains()`):** Use this when the user's query implies a search for a fragment or keyword. Look for phrases like 'có chứa', 'liên quan đến', or when the user provides an incomplete name (e.g., searching for 'thuoc quynh anh' inside a full name).\n\n"
 
-        "3.  **Strict JSON Output:** Your final response MUST BE a single, valid JSON object with two keys: `reasoning` (your thought process, explaining how you apply the principles) and `code` (the executable Python code).\n\n"
+        "3.  **Use Provided Helper Functions:** The function `standardize_text(text)` is available. Use it for Principle #1. Do not redefine it.\n\n"
+
+        "4.  **Strict JSON Output:** Your final response MUST BE a single, valid JSON object with `reasoning` and `code` keys.\n\n"
 
         "--- EXAMPLES OF APPLYING THE PRINCIPLES ---\n"
         "{examples}\n\n"
@@ -128,14 +131,9 @@ class DataAnalystAgent:
         "--- CURRENT TASK ---\n"
         f"Today's date is {time.strftime('%d/%m/%Y')}.\n"
         "Here is the context for the current DataFrame:\n"
-        "{master_data_context}"  # Use a named placeholder
-        "####\n" 
+        "{master_data_context}"
         "- Column Data Types (df.dtypes):\n"
         "{df_dtypes}\n\n"
-        # "- Column Value Examples:\n"
-        # "{column_examples}\n\n"
-        # "- First 5 Rows (df.head()):\n"
-        # "{df_head_csv}\n\n"
         "User's question: {query}"
     )
 
@@ -152,16 +150,16 @@ class DataAnalystAgent:
                 "Để tìm", "Áp dụng Nguyên tắc #1 (Robust Text Comparison), để tìm"
             )
             code = example["output"].code.replace(
-                "# Định nghĩa hàm chuẩn hóa để sử dụng\nfrom unidecode import unidecode\ndef standardize_text(text: str) -> str:\n    if not isinstance(text, str): return \"\"\n    return unidecode(text).lower().strip()\n",
+                "# Định nghĩa hàm chuẩn hóa để sử dụng",
                 "# Using the pre-defined standardize_text() helper function."
             )
 
             output_dict = {"reasoning": reasoning, "code": code}
-            json_output = json.dumps(output_dict, ensure_ascii=False, indent=2)
+            # json_output = json.dumps(output_dict, ensure_ascii=False, indent=2)
 
             formatted_list.append(
                 f"Question: {query}\n"
-                f"Answer:\n{json_output}"
+                f"Answer:\n{output_dict}"
             )
         return "\n\n".join(formatted_list)
 
@@ -252,33 +250,13 @@ class DataAnalystAgent:
         print("INFO: Transformation complete and cached.")
         return transformed
 
-def analyze_dataframe(query: str, df: pd.DataFrame, master_data: str, row_rules:dict, user_id:str, user_role:str) -> dict:
-    """
-    Phân tích dữ liệu dạng bảng (CSV/Excel).
-    Chỉ sử dụng tool này nếu người dùng hỏi về bảng, con số, dữ liệu dạng bảng.
-    Tool sẽ tự lấy file pickle mới nhất trong working_data/.
-    """
-    # ===== Data Preprocessing =====
+def analyze_dataframe(query: str, df: pd.DataFrame, master_data: str, row_rules:dict, user_id:str, user_role:str, selected_db:str) -> dict:
     try:
-        print("The user role is ", user_role )
-        print("The user id is ", user_id )
-        row_rules = row_rules.get('rowRules', {})
-        roles = row_rules.keys()
-        print("The row rules are ", row_rules)
-        if user_id != 'duythai':
-            for role in roles:
-                print("The role of current is ", role)
-                if role == user_role:
-                    print('This go inside ')
-                    print("we have ", row_rules[role])
-                    for permission in row_rules[role]:
-                        print(permission, permission["column"])
-                        df = df[df[permission["column"]] == int(user_id)]
-                        print("we run into this read along column")
+        df = authorize(row_rules, user_id, user_role, df, selected_db)
 
         # init class DataAnalystAgent
         # Chèn Master Data vào vị trí '####'
-        print("The master data is ", master_data)
+        # print("The master data is ", master_data)
         # Sau đó mới tiến hành transform DataFrame
         df = DataAnalystAgent.transform_df(df)  # Use cached transformation
         print("DataFrame after transformation:\n", df.head())
@@ -288,9 +266,9 @@ def analyze_dataframe(query: str, df: pd.DataFrame, master_data: str, row_rules:
 
     # ===== Environment Setup =====
     execution_env = {
-        "df": df.copy(),  # Prevent mutation of original DataFrame
-        "pd": pd,  # Provide pandas as global variable
-        "np": np,  # Provide numpy as global variable,
+        "df": df.copy(),
+        "pd": pd,
+        "np": np,
         "standardize_text": standardize_text
     }
 

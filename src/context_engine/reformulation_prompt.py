@@ -40,6 +40,24 @@ class ReformulationPrompt(BasePrompt):
         """
         return self.format(context_str=context_str, query=query)
 
+reformulation_query_prompt = """
+    Bạn là một trợ lý chuyên về định dạng văn bản. Nhiệm vụ của bạn là trình bày lại câu trả lời dưới đây một cách chuyên nghiệp và dễ đọc, lịch sự, và hãy nói sơ qua về lý do bạn làm như vậy (nói đơn giản dễ hiểu, không đề cập đến kỹ thuật như dataframe, cột, dòng, etc).
+
+    **Yêu cầu định dạng:**
+    - **In đậm:** Sử dụng in đậm cho các tiêu đề chính hoặc các thuật ngữ quan trọng.
+    - **Danh sách:** Sử dụng gạch đầu dòng (-) hoặc danh sách có thứ tự (1., 2.) để liệt kê các ý.
+    - **Viết hoa:** Luôn viết hoa tên riêng, tên người, tên sản phẩm, và các danh từ riêng quan trọng.
+    - **Cấu trúc:** Phân chia nội dung thành các đoạn văn ngắn, có tiêu đề rõ ràng nếu cần.
+    - **Lưu ý:** Tuyệt đối không sử dụng định dạng bảng, chỉ trả lời dựa trên câu trả lời từ người dùng, không được thêm kiến thức khác.
+
+    **Đây là câu trả lời hãy chỉ cho ra kết quả cuối cùng, không kèm thêm gì**
+     - **Câu trả lời:** "{answer}"
+     - **Câu hỏi của người dùng:** "{query}"
+     - **Lý do phân tích:** "{reason}"
+     - **Tổng quan dữ liệu và các cột có trong dữ liệu:** "{db_description}"
+"""
+
+not_known_prompt = "Rất tiếc, tôi chưa có thông tin về vấn đề này. Vui lòng liên hệ bộ phận hỗ trợ phù hợp để được giải đáp."
 
 # Create an instance for easy import
 reformulation_prompt_ins = ReformulationPrompt()

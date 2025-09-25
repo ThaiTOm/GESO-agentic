@@ -10,6 +10,10 @@ from database.sql_connection import load_and_cache_database_server
 
 # --- FastAPI Application Setup ---
 
+os.environ["LANGSMITH_API_KEY"] = settings.LANGSMITH_API_KEY
+os.environ["LANGSMITH_PROJECT"] = settings.LANGSMITH_PROJECT
+os.environ["LANGSMITH_TRACING_V2"] = settings.LANGSMITH_TRACING_V2
+
 app = FastAPI(
     title="Policy-Aware Orchestrator Agent",
     description="Orchestrates calls to backend RAG and Data Analysis services after enforcing access policies.",
@@ -32,8 +36,8 @@ app.add_middleware(LoggingMiddleware)
 # This is efficient as the graph structure doesn't change.
 langgraph_app = build_graph()
 
-load_and_cache_database_server("OPC", "FACTDOANHTHU")
-
+load_and_cache_database_server("OPCDB", "FACTDOANHTHU", save_master=True)
+# load_and_cache_database_server("OPC", "DIMNHANVIENGSBH")
 # --- API Endpoint Definition ---
 
 @app.post("/orchestrate", response_model=OrchestratorResponse)

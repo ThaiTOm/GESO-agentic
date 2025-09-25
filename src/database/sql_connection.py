@@ -9,15 +9,7 @@ from config import settings
 from context_engine.master_db_description import FACT_DOANH_THU_DESCRIPTION
 from database.redis_connection import r
 
-# --- Configuration Section (Unchanged) ---
-# Make sure you have the correct primary key for FACT_DOANHTHU
-TABLE_CONFIG = {
-    "FACTDOANHTHU": {"id_column": "ID", "table_name": "FACT_DOANHTHU"},  # Assuming the PK is 'ID' based on the new query
-    "DIM_NHANVIEN_KHO": {"id_column": "Id"},
-    "DIM_NHANVIEN_KENH": {"id_column": "Id"},
-}
 
-# --- Database and File Setup (Unchanged) ---
 DB_ENGINE = create_engine(
     settings.OPC_DATABASE_URL,
     connect_args={"fast_executemany": False}
@@ -105,7 +97,7 @@ def stream_synced_data(engine, table_name, id_column, batch_size=100000, update_
                     # 1. READ OPERATION: Select the NEXT available batch of unsynced rows.
                     query = (
                         f"SELECT TOP ({batch_size}) * FROM {table_name} "
-                        f"WHERE is_syn_pt = 0 "
+                        f"WHERE is_syn_pt = 0 OR isnull(is_syn_pt, 0) = 0 "
                         f"ORDER BY {id_column}"
                     )
 
@@ -160,7 +152,7 @@ def stream_synced_data(engine, table_name, id_column, batch_size=100000, update_
 
 
 def loader(table_name):
-    config = TABLE_CONFIG.get(table_name)
+    config = settings.TABLE_CONFIG.get(table_name)
     if not config:
         raise ValueError(f"No configuration found for table: {table_name}")
     return sync_data_to_df(DB_ENGINE, table_name, config['id_column'])
@@ -182,7 +174,7 @@ def load_or_query_parquet(table_name, loader_func):
     return df
 
 
-def sql_query_builder(collection_name, table_name, data):
+def sql_query_builder(collection_name, table_name, data, save_master=True):
     redis_key = settings.DATAFRAME_CACHE_DEFINE.format(
         collection=collection_name,
         full_path=table_name,
@@ -190,6 +182,9 @@ def sql_query_builder(collection_name, table_name, data):
     )
     cached_result_bytes = r.get(redis_key)
     if not cached_result_bytes:
+        r.set(redis_key, pickle.dumps(data), ex=settings.REDIS_EXPIRE_TIME)
+
+    if save_master:
         master_description = settings.MASTER_DESCRIPTION_DEFINE.format(
             type="db",
             collection=collection_name,
@@ -197,10 +192,10 @@ def sql_query_builder(collection_name, table_name, data):
             description=FACT_DOANH_THU_DESCRIPTION
         )
         r.rpush(settings.LIST_MASTER_DATA_DESCRIPTION, master_description)
-        r.set(redis_key, pickle.dumps(data), ex=settings.REDIS_EXPIRE_TIME)
 
+    return
 
-def load_and_cache_database_server(collection_name, table_name) -> str:
+def load_and_cache_database_server(collection_name, table_name, save_master) -> str:
     redis_key = settings.DATAFRAME_CACHE_DEFINE.format(
         collection=collection_name,
         full_path=table_name,
@@ -211,7 +206,15 @@ def load_and_cache_database_server(collection_name, table_name) -> str:
     if cached_result_bytes:
         result = pickle.loads(cached_result_bytes)
         print(f"Cache hit for key: {redis_key}. Loading data from Redis cache.")
-        print(result.iloc[:5])
+        result[:1000].to_excel('dimnhanvien.xlsx', index=False, sheet_name='Synced Data')
+        # master_description = settings.MASTER_DESCRIPTION_DEFINE.format(
+        #     type="db",
+        #     collection=collection_name,
+        #     full_path=table_name,
+        #     description=FACT_DOANH_THU_DESCRIPTION
+        # )
+        # r.rpush(settings.LIST_MASTER_DATA_DESCRIPTION, master_description)
+
         return "YES"
 
 
@@ -220,8 +223,8 @@ def load_and_cache_database_server(collection_name, table_name) -> str:
 
     all_dfs = list(stream_synced_data(
         DB_ENGINE,
-        TABLE_CONFIG[table_name]['table_name'],
-        TABLE_CONFIG[table_name]['id_column'],
+        settings.TABLE_CONFIG[table_name]['table_name'],
+        settings.TABLE_CONFIG[table_name]['id_column'],
         batch_size=10000,  # Start with a larger batch size
         update_chunk_size=10000
     ))
@@ -234,8 +237,8 @@ def load_and_cache_database_server(collection_name, table_name) -> str:
         final_df = pd.concat(all_dfs, ignore_index=True)
         print(f"Saving DataFrame with {len(final_df)} rows to Excel file...")
         excel_start_time = time.time()
-        output_filename = 'synced_data_output.xlsx'
-        final_df[:1000].to_excel(output_filename, sheet_name='Synced Data', index=False)
+        output_filename = 'dimnhanvien.xlsx'
+        final_df[:50].to_excel(output_filename, sheet_name='Synced Data', index=False)
         excel_end_time = time.time()
 
         print(f"--- Excel writing took: {excel_end_time - excel_start_time:.2f} seconds ---")
@@ -245,5 +248,9 @@ def load_and_cache_database_server(collection_name, table_name) -> str:
 
     end_time = time.time()
     print(f"--- Total script runtime: {end_time - start_time:.2f} seconds ---")
-    sql_query_builder(collection_name, table_name, final_df)
+    sql_query_builder(collection_name, table_name, final_df, save_master)
     return "NO"
+
+if __name__ == "__main__":
+    # Example usage
+    load_and_cache_database_server("duythaitest", "FACTDOANHTHU", save_master=True)

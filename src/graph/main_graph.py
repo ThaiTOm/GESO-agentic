@@ -55,44 +55,12 @@ async def update_history_and_summarize_node(state: OrchestratorState) -> dict:
     # 1. Get current state values, providing defaults
     user_query = state.get("query", "")
     final_response = state.get("final_response", "")
-    # Your history is a list of dicts, so we handle it as such
     chat_history = state.get("chat_history", [])
     current_summary = state.get("conversation_summary", "Đây là lượt đầu tiên của cuộc trò chuyện.")
 
     return {
         "chat_history": chat_history,
         "conversation_summary": current_summary
-    }
-    
-    # Ensure final_response is a string for the history
-    if isinstance(final_response, dict):
-        if "text_summary_for_llm" in final_response:
-            response_text = final_response.get("text_summary_for_llm", str(final_response))
-        else:
-            response_text = final_response.get("answer", str(final_response))
-    else:
-        response_text = str(final_response)
-
-    # 2. Append the latest exchange to the chat history as dictionaries
-    # This matches your `OrchestratorState` type hint: `list[dict]`
-    chat_history.append({"role": "user", "content": user_query})
-    chat_history.append({"role": "assistant", "content": response_text})
-
-    summarizer_chain = SUMMARY_PROMPT | llm | StrOutputParser()
-
-    # 4. Invoke the chain to get the new summary
-    new_summary = await summarizer_chain.ainvoke({
-        "current_summary": current_summary,
-        "user_query": user_query,
-        "new_response": response_text
-    })
-
-    print(f"--- NEW SUMMARY: {new_summary} ---")
-
-    # 5. Return the updated history and summary to be saved in the state
-    return {
-        "chat_history": chat_history,
-        "conversation_summary": new_summary
     }
 
 
@@ -150,7 +118,8 @@ async def tool_router_node(state: OrchestratorState) -> dict:
 
     reformulated_query = await reformulate_query_with_chain(
         query=state['query'],
-        chat_history=state['chat_history']
+        chat_history=state['chat_history'],
+        user_id=state["user_id"],
     )
 
     instance_finding = get_classifier_pipeline()

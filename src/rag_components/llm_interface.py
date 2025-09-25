@@ -62,7 +62,7 @@ reformulation_chain = (
 )
 
 # 3. Create the new async function that wraps the logic
-async def reformulate_query_with_chain(query: str, chat_history: List[Dict]) -> str:
+async def reformulate_query_with_chain(query: str, chat_history: List[Dict], user_id="str") -> str:
     """Reformulates a query to be standalone if chat history exists."""
 
     if not chat_history:
@@ -78,6 +78,6 @@ async def reformulate_query_with_chain(query: str, chat_history: List[Dict]) -> 
     # Invoke the chain
     reformulated = await reformulation_chain.ainvoke({
         "chat_history": context_str,
-        "query": query
+        "query": f"Tôi là user: {user_id}. {query}." ,
     })
     return reformulated.strip()
