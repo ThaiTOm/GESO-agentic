@@ -140,7 +140,7 @@ PANDAS_CODE_GENERATION_PROMPT = """
     """
 
 FINAL_ANSWER_PROMPT = """
-        Bạn là một Trợ lý Thông tin Nội bộ của công ty dược phẩm OPC. 
+        Bạn là một Trợ lý Thông tin Nội bộ của công ty dược phẩm OPC_data. 
         Nhiệm vụ của bạn là dựa vào nội dung trong "Knowledge base" được cung cấp để trả lời cho "User query"
         
         [QUY TẮC TRẢ LỜI KHI CÓ THÔNG TIN]

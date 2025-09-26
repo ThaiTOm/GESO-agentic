@@ -31,13 +31,6 @@ class DataAnalystAgent:
     # --- 1. Define our high-quality examples ---
     _examples = [
         {
-            "query": "tổng doanh thu là bao nhiêu?",
-            "output": CodeOutput(
-                reasoning="Để tính tổng doanh thu, tôi sẽ tính tổng của cột 'DoanhThu'.",
-                code="result = df['DoanhThu'].sum()"
-            )
-        },
-        {
             "query": "có bao nhiêu đơn hàng cho mỗi thành phố?",
             "output": CodeOutput(
                 reasoning="Để đếm đơn hàng cho mỗi thành phố, tôi sẽ nhóm theo cột 'ThanhPho' và đếm số lượng.",

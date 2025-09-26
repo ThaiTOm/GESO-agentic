@@ -36,8 +36,8 @@ app.add_middleware(LoggingMiddleware)
 # This is efficient as the graph structure doesn't change.
 langgraph_app = build_graph()
 
-load_and_cache_database_server("OPCDB", "FACTDOANHTHU", save_master=True)
-# load_and_cache_database_server("OPC", "DIMNHANVIENGSBH")
+# load_and_cache_database_server("OPCDB", "FACTDOANHTHU", save_master=True)
+load_and_cache_database_server("duythaitest", "DIMNHANVIENGSBH", save_master=False)
 # --- API Endpoint Definition ---
 
 @app.post("/orchestrate", response_model=OrchestratorResponse)

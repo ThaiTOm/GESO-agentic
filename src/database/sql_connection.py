@@ -201,6 +201,7 @@ def load_and_cache_database_server(collection_name, table_name, save_master) -> 
         full_path=table_name,
         type="db"
     )
+    print("We go to redis key: ", redis_key)
     cached_result_bytes = r.get(redis_key)
 
     if cached_result_bytes:

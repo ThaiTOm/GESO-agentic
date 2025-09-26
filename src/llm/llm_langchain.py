@@ -1,23 +1,25 @@
 # llm_langchain.py
 
-from typing import Any, List, Optional, ClassVar
-
+from typing import Any, List, Optional, ClassVar, Dict
 from google.generativeai.types import GenerateContentResponse
 from langchain_core.callbacks.manager import (
     CallbackManagerForLLMRun,
     AsyncCallbackManagerForLLMRun,
 )
 from langchain_core.language_models.chat_models import BaseChatModel
-from langchain_core.messages import BaseMessage, AIMessage
+from langchain_core.messages import BaseMessage, AIMessage, SystemMessage, HumanMessage
 from langchain_core.outputs import ChatResult, ChatGeneration
 from pydantic import Field
-from typing import Any, List, Optional, ClassVar, Dict # <-- Add Dict
-from langchain_core.messages import BaseMessage, AIMessage, SystemMessage, HumanMessage # <-- Add more message types
 
 from .llm_call import service_pool, LLMServicePool
 
-def _convert_lc_messages_to_openai_format(messages: List[BaseMessage]) -> List[Dict[str, str]]:
-    """Converts a list of LangChain messages to the OpenAI API dictionary format."""
+# --- MODIFIED FUNCTION ---
+def _convert_lc_messages_to_openai_format(messages: List[BaseMessage]) -> List[Dict[str, Any]]:
+    """
+    Converts a list of LangChain messages to the OpenAI API dictionary format.
+    Handles both text-only (message.content is str) and multimodal
+    (message.content is a list of dicts) messages.
+    """
     openai_messages = []
     for message in messages:
         if isinstance(message, HumanMessage):
@@ -27,9 +29,12 @@ def _convert_lc_messages_to_openai_format(messages: List[BaseMessage]) -> List[D
         elif isinstance(message, SystemMessage):
             role = "system"
         else:
-            # Skip or handle other message types if necessary
             continue
+
+        # This part now works for both strings and lists of dicts automatically,
+        # as LangChain structures `message.content` correctly.
         openai_messages.append({"role": role, "content": message.content})
+
     return openai_messages
 
 class CustomLLMChatModel(BaseChatModel):
@@ -44,7 +49,6 @@ class CustomLLMChatModel(BaseChatModel):
     def _llm_type(self) -> str:
         return "custom_llm_chat_model"
 
-    # --- REVERTED THIS METHOD ---
     def _create_chat_result(self, response: Any) -> ChatResult:
         """
         Helper to convert API responses into a ChatResult.
@@ -54,7 +58,6 @@ class CustomLLMChatModel(BaseChatModel):
         model_name = ""
 
         if hasattr(response, 'usage_metadata'):
-            # This is a Gemini response with token counts
             token_usage = {
                 "prompt_tokens": response.usage_metadata.prompt_token_count,
                 "completion_tokens": response.usage_metadata.candidates_token_count,
@@ -62,7 +65,6 @@ class CustomLLMChatModel(BaseChatModel):
             }
             model_name = self.service_pool.services['gemini'][0].model_name
         else:
-            # This is our simple response from the LocalService (no token counts)
             token_usage = {
                 "prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0
             }
@@ -88,19 +90,19 @@ class CustomLLMChatModel(BaseChatModel):
             **kwargs: Any,
     ) -> ChatResult:
         """SYNCHRONOUS implementation. Routes to the configured provider."""
-        # --- MODIFICATION ---
-        # For Gemini, we still need the flattened prompt.
-        # For Local, we need the structured messages.
         if self.provider == "local":
-            # Pass the structured messages directly
+            # This now correctly handles multimodal messages
             request_data = _convert_lc_messages_to_openai_format(messages)
         else: # provider is gemini
-            # Flatten for Gemini API
-            request_data = "\n".join([msg.content for msg in messages])
+            # NOTE: For Gemini multimodal, a different formatting would be needed.
+            # This implementation flattens content, assuming text-only for Gemini.
+            request_data = "\n".join(
+                [str(msg.content) for msg in messages if isinstance(msg.content, str)]
+            )
 
         response = self.service_pool.route_call_sync(
             provider=self.provider,
-            request_data=request_data, # Use a generic name
+            request_data=request_data,
             max_output_tokens=kwargs.get("max_output_tokens", 1024),
             temperature=kwargs.get("temperature", 0.0)
         )
@@ -118,15 +120,19 @@ class CustomLLMChatModel(BaseChatModel):
             **kwargs: Any,
     ) -> ChatResult:
         """ASYNCHRONOUS implementation. Routes to the configured provider."""
-        # --- MODIFICATION ---
         if self.provider == "local":
+            # This now correctly handles multimodal messages
             request_data = _convert_lc_messages_to_openai_format(messages)
         else: # provider is gemini
-            request_data = "\n".join([msg.content for msg in messages])
+            # NOTE: For Gemini multimodal, a different formatting would be needed.
+            # This implementation flattens content, assuming text-only for Gemini.
+             request_data = "\n".join(
+                [str(msg.content) for msg in messages if isinstance(msg.content, str)]
+            )
 
         response = await self.service_pool.route_call_async(
             provider=self.provider,
-            request_data=request_data, # Use a generic name
+            request_data=request_data,
             max_output_tokens=kwargs.get("max_output_tokens", 1024),
             temperature=kwargs.get("temperature", 0.0)
         )

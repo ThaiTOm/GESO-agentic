@@ -120,6 +120,7 @@ async def tool_router_node(state: OrchestratorState) -> dict:
         query=state['query'],
         chat_history=state['chat_history'],
         user_id=state["user_id"],
+        user_role=state["user_role"]
     )
 
     instance_finding = get_classifier_pipeline()
